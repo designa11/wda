@@ -1,0 +1,1957 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>결선도 에디터</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%8C%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --app-bg:#14171c;
+    --panel-bg:#1b1f27;
+    --panel-bg-2:#20242d;
+    --panel-border:#2a2f3a;
+    --text:#e6e8eb;
+    --text-secondary:#8d95a3;
+    --accent:#e08a2c;
+    --accent-soft:rgba(224,138,44,0.16);
+    --accent-2:#3ea3ff;
+    --danger:#ef4444;
+    --canvas-bg:#f6f5f1;
+    --canvas-grid:#e2e0d9;
+    --kbd-bg:#12151a;
+    --kbd-border:#343b47;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --app-bg:#eef0f3;
+      --panel-bg:#ffffff;
+      --panel-bg-2:#f5f6f8;
+      --panel-border:#dcdfe4;
+      --text:#1c2026;
+      --text-secondary:#6b7280;
+      --kbd-bg:#f2f3f5;
+      --kbd-border:#d3d7dd;
+    }
+  }
+  :root[data-theme="light"]{
+    --app-bg:#eef0f3;
+    --panel-bg:#ffffff;
+    --panel-bg-2:#f5f6f8;
+    --panel-border:#dcdfe4;
+    --text:#1c2026;
+    --text-secondary:#6b7280;
+    --kbd-bg:#f2f3f5;
+    --kbd-border:#d3d7dd;
+  }
+  :root[data-theme="dark"]{
+    --app-bg:#14171c;
+    --panel-bg:#1b1f27;
+    --panel-bg-2:#20242d;
+    --panel-border:#2a2f3a;
+    --text:#e6e8eb;
+    --text-secondary:#8d95a3;
+    --kbd-bg:#12151a;
+    --kbd-border:#343b47;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{ animation:none !important; transition:none !important; }
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    background:var(--app-bg);
+    color:var(--text);
+    font-family:'Inter',system-ui,sans-serif;
+    overflow:hidden;
+  }
+  button{ font-family:inherit; }
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .mono{ font-family:'JetBrains Mono',ui-monospace,monospace; }
+
+  .app{ display:grid; grid-template-rows:52px 1fr 28px; height:100vh; }
+
+  /* ---------- topbar ---------- */
+  .topbar{
+    display:flex; align-items:center; gap:14px;
+    padding:0 14px;
+    background:var(--panel-bg);
+    border-bottom:1px solid var(--panel-border);
+  }
+  .brand{ display:flex; align-items:center; gap:8px; font-weight:600; font-size:14px; white-space:nowrap; }
+  .brand-mark{ font-size:18px; }
+  .topbar-divider{ width:1px; align-self:stretch; background:var(--panel-border); margin:8px 0; }
+  .topbar-group{ display:flex; align-items:center; gap:4px; }
+  .tbtn{
+    display:flex; align-items:center; gap:6px;
+    background:transparent; border:1px solid transparent; color:var(--text-secondary);
+    padding:6px 9px; border-radius:6px; font-size:12.5px; cursor:pointer;
+  }
+  .tbtn:hover{ background:var(--panel-bg-2); color:var(--text); }
+  .tbtn:disabled{ opacity:.35; cursor:not-allowed; }
+  .tbtn:disabled:hover{ background:transparent; color:var(--text-secondary); }
+  .zoomlabel{ min-width:44px; text-align:center; }
+  .spacer{ flex:1; }
+  .file-input{ display:none; }
+  .theme-toggle{
+    background:transparent;border:1px solid var(--panel-border); color:var(--text-secondary);
+    width:30px; height:30px; border-radius:7px; cursor:pointer; font-size:14px;
+  }
+  .theme-toggle:hover{ color:var(--text); }
+
+  /* ---------- body row ---------- */
+  .body-row{ display:grid; grid-template-columns:60px 1fr 258px; min-height:0; }
+
+  .toolbar{
+    display:flex; flex-direction:column; align-items:center; gap:5px;
+    padding:12px 0; background:var(--panel-bg); border-right:1px solid var(--panel-border);
+    overflow-y:auto;
+  }
+  .tool{
+    position:relative;
+    width:42px; height:42px; border-radius:9px;
+    background:transparent; border:1px solid transparent; color:var(--text-secondary);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    cursor:pointer; gap:1px;
+  }
+  .tool svg{ width:18px; height:18px; }
+  .tool .key{ font-size:8.5px; font-weight:600; letter-spacing:.02em; }
+  .tool:hover{ background:var(--panel-bg-2); color:var(--text); }
+  .tool.active{ background:var(--accent-soft); color:var(--accent); border-color:var(--accent); }
+  .toolbar-divider{ width:26px; height:1px; background:var(--panel-border); margin:5px 0; }
+
+  .canvas-wrap{ position:relative; overflow:hidden; background:var(--canvas-bg); }
+  svg#canvas{ width:100%; height:100%; display:block; touch-action:none; }
+  .canvas-wrap.tool-draw svg#canvas{ cursor:crosshair; }
+  .canvas-wrap.tool-select svg#canvas{ cursor:default; }
+
+  .panel{
+    background:var(--panel-bg); border-left:1px solid var(--panel-border);
+    padding:16px 14px; overflow-y:auto;
+  }
+  .panel h3{ margin:0 0 3px; font-size:12.5px; font-weight:600; }
+  .panel .sub{ margin:0 0 14px; font-size:11px; color:var(--text-secondary); line-height:1.5; }
+  .field{ margin-bottom:12px; }
+  .field label{ display:block; font-size:11px; color:var(--text-secondary); margin-bottom:5px; }
+  .field input[type="text"], .field input[type="number"]{
+    width:100%; background:var(--panel-bg-2); border:1px solid var(--panel-border); color:var(--text);
+    border-radius:6px; padding:7px 8px; font-size:12.5px; font-family:'JetBrains Mono',monospace;
+  }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .swrow{ display:flex; gap:7px; flex-wrap:wrap; }
+  .sw{
+    width:24px; height:24px; border-radius:6px; cursor:pointer; border:2px solid transparent;
+  }
+  .sw.active{ border-color:var(--text); }
+  .rangewrap{ display:flex; align-items:center; gap:8px; }
+  .rangewrap input[type=range]{ flex:1; }
+  .rangewrap span{ font-size:11px; width:22px; text-align:right; color:var(--text-secondary); }
+  .btn{
+    width:100%; padding:8px 10px; border-radius:7px; border:1px solid var(--panel-border);
+    background:var(--panel-bg-2); color:var(--text); font-size:12.5px; cursor:pointer; text-align:left;
+  }
+  .btn:hover{ border-color:var(--accent); color:var(--accent); }
+  .btn.danger:hover{ border-color:var(--danger); color:var(--danger); }
+  .btn-row{ display:flex; flex-direction:column; gap:7px; margin-top:6px; }
+  .hint{
+    margin-top:14px; padding:10px; border-radius:8px; background:var(--panel-bg-2);
+    font-size:11px; color:var(--text-secondary); line-height:1.6;
+  }
+  .hint b{ color:var(--text); }
+  .empty-panel{ font-size:12px; color:var(--text-secondary); line-height:1.7; }
+
+  /* ---------- statusbar ---------- */
+  .statusbar{
+    display:flex; align-items:center; gap:18px; padding:0 14px;
+    background:var(--panel-bg); border-top:1px solid var(--panel-border);
+    font-size:10.5px; color:var(--text-secondary);
+  }
+  .statusbar .sep{ opacity:.5; }
+
+  /* ---------- shortcuts overlay ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:50;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .overlay.hidden{ display:none; }
+  .sheet{
+    width:560px; max-width:92vw; max-height:82vh; overflow-y:auto;
+    background:var(--panel-bg); border:1px solid var(--panel-border); border-radius:12px;
+    padding:22px 24px;
+  }
+  .sheet h2{ margin:0 0 4px; font-size:16px; }
+  .sheet .sheet-sub{ margin:0 0 16px; font-size:12px; color:var(--text-secondary); }
+  .sheet table{ width:100%; border-collapse:collapse; }
+  .sheet td{ padding:6px 0; font-size:12.5px; border-top:1px solid var(--panel-border); vertical-align:top; }
+  .sheet td:first-child{ width:150px; white-space:nowrap; }
+  kbd{
+    display:inline-block; background:var(--kbd-bg); border:1px solid var(--kbd-border);
+    border-bottom-width:2px; border-radius:5px; padding:2px 6px; font-family:'JetBrains Mono',monospace;
+    font-size:11px; margin-right:3px;
+  }
+  .sheet-close{
+    position:absolute; top:14px; right:16px; background:transparent; border:none; color:var(--text-secondary);
+    font-size:18px; cursor:pointer;
+  }
+  .sheet-wrap{ position:relative; }
+
+  /* ---------- label editor ---------- */
+  #labelEditor{
+    position:absolute; z-index:20; font-family:'JetBrains Mono',monospace; text-align:center;
+    border:1.5px solid var(--accent); border-radius:5px; background:rgba(255,255,255,.96);
+    color:#111; padding:2px 4px; display:none;
+  }
+
+  /* ---------- toast ---------- */
+  #toast{
+    position:fixed; left:50%; bottom:44px; transform:translate(-50%,10px);
+    background:#111318; color:#f4f4f4; border:1px solid #333; padding:8px 14px; border-radius:8px;
+    font-size:12px; opacity:0; pointer-events:none; z-index:60; transition:opacity .18s ease, transform .18s ease;
+  }
+  #toast.show{ opacity:1; transform:translate(-50%,0); }
+
+  @media (max-width: 760px){
+    .body-row{ grid-template-columns:52px 1fr 0; }
+    .panel{ position:fixed; right:0; top:52px; bottom:28px; width:78vw; max-width:300px; z-index:30;
+      transform:translateX(100%); transition:transform .2s ease; }
+    .panel.mobile-open{ transform:translateX(0); }
+    .brand span.brand-text{ display:none; }
+  }
+
+  /* ---------- library drawer ---------- */
+  .library-drawer{
+    position:absolute; left:0; top:0; bottom:0; width:262px;
+    background:var(--panel-bg); border-right:1px solid var(--panel-border);
+    z-index:15; overflow-y:auto; padding:14px;
+    transform:translateX(-100%); transition:transform .18s ease;
+  }
+  .library-drawer.open{ transform:translateX(0); }
+  .lib-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .lib-header h3{ margin:0; font-size:13px; }
+  .lib-close{ background:transparent; border:none; color:var(--text-secondary); cursor:pointer; font-size:16px; padding:2px 4px; }
+  .lib-empty{ font-size:12px; color:var(--text-secondary); line-height:1.7; }
+  .lib-item{ border:1px solid var(--panel-border); border-radius:9px; padding:9px; margin-bottom:9px; background:var(--panel-bg-2); }
+  .lib-item-thumb{ width:100%; height:64px; background:var(--canvas-bg); border-radius:6px; margin-bottom:7px; overflow:hidden; }
+  .lib-item-thumb svg{ width:100%; height:100%; display:block; }
+  .lib-item-name{ font-size:12.5px; font-weight:600; margin-bottom:6px; }
+  .lib-item-actions{ display:flex; gap:6px; }
+  .lib-item-actions button{ flex:1; font-size:11.5px; padding:5px 6px; border-radius:6px; border:1px solid var(--panel-border); background:var(--panel-bg); color:var(--text); cursor:pointer; }
+  .lib-item-actions button:hover{ border-color:var(--accent); color:var(--accent); }
+  .lib-item-actions button.del:hover{ border-color:var(--danger); color:var(--danger); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand"><span class="brand-mark">🔌</span><span class="brand-text">결선도 에디터</span></div>
+    <div class="topbar-divider"></div>
+    <div class="topbar-group">
+      <button class="tbtn" id="btnUndo" title="실행 취소 (Ctrl+Z)">↶ 실행취소</button>
+      <button class="tbtn" id="btnRedo" title="다시 실행 (Ctrl+Shift+Z)">↷ 다시실행</button>
+    </div>
+    <div class="topbar-divider"></div>
+    <button class="tbtn" id="btnLibrary" title="컴포넌트 라이브러리">📦 라이브러리</button>
+    <div class="topbar-divider"></div>
+    <div class="topbar-group">
+      <button class="tbtn" id="btnZoomOut" title="축소 (-)">－</button>
+      <span class="tbtn zoomlabel mono" id="zoomLabel" title="전체 보기 (0)" style="cursor:pointer;">100%</span>
+      <button class="tbtn" id="btnZoomIn" title="확대 (+)">＋</button>
+      <button class="tbtn" id="btnFit" title="전체 보기 (0)">전체보기</button>
+      <button class="tbtn" id="btnGrid" title="격자 스냅 토글 (G)">▦ 스냅</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="topbar-group" id="exportGroup">
+      <button class="tbtn" id="btnImport" title="JSON 파일 불러오기">가져오기</button>
+      <button class="tbtn" id="btnExportPng" title="PNG로 내보내기">PNG</button>
+      <button class="tbtn" id="btnExportSvg" title="SVG로 내보내기">SVG</button>
+      <button class="tbtn" id="btnExportJson" title="JSON으로 내보내기">JSON</button>
+    </div>
+    <div class="topbar-divider"></div>
+    <button class="tbtn" id="btnClear" title="전체 지우기">전체지우기</button>
+    <button class="tbtn" id="btnHelp" title="단축키 안내 (?)">？ 단축키</button>
+    <button class="theme-toggle" id="btnTheme" title="테마 전환">🌗</button>
+    <input type="file" id="importInput" class="file-input" accept="application/json">
+  </div>
+
+  <div class="body-row">
+    <div class="toolbar" id="toolbar">
+      <button class="tool" data-tool="select" title="선택 / 이동 (V)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 3l14 8-6 1.5L11 19z"/></svg>
+        <span class="key">V</span>
+      </button>
+      <button class="tool" data-tool="pcb" title="PCB 배치 (P) — 드래그로 크기 지정">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><circle cx="7" cy="7" r="1" fill="currentColor" stroke="none"/><circle cx="17" cy="7" r="1" fill="currentColor" stroke="none"/><circle cx="7" cy="17" r="1" fill="currentColor" stroke="none"/><circle cx="17" cy="17" r="1" fill="currentColor" stroke="none"/></svg>
+        <span class="key">P</span>
+      </button>
+      <button class="tool" data-tool="box" title="부품 박스 배치 (B) — 드래그로 크기 지정">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="6" width="16" height="12" rx="2"/><line x1="7" y1="10" x2="13" y2="10"/><line x1="7" y1="13.5" x2="11" y2="13.5"/></svg>
+        <span class="key">B</span>
+      </button>
+      <button class="tool" data-tool="wire" title="배선 그리기 (W) — 클릭으로 꺾기, 더블클릭/Enter로 완료">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h6v6h10"/><circle cx="4" cy="6" r="1.6" fill="currentColor" stroke="none"/><circle cx="20" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg>
+        <span class="key">W</span>
+      </button>
+      <button class="tool" data-tool="text" title="텍스트 라벨 (T)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 6h14M12 6v12"/></svg>
+        <span class="key">T</span>
+      </button>
+      <button class="tool" data-tool="port" title="포트/핀 표시 (O) — 원 또는 사각형">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="3.6"/><rect x="13.5" y="13" width="7" height="7" rx="1"/></svg>
+        <span class="key">O</span>
+      </button>
+      <button class="tool" data-tool="legend" title="배선 범례 박스 (L)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="4" width="17" height="16" rx="1.5"/><line x1="7" y1="9" x2="10" y2="9"/><line x1="12" y1="9" x2="17" y2="9"/><line x1="7" y1="14" x2="10" y2="14"/><line x1="12" y1="14" x2="17" y2="14"/></svg>
+        <span class="key">L</span>
+      </button>
+      <div class="toolbar-divider"></div>
+      <div class="swrow" id="colorPicker" style="flex-direction:column;"></div>
+      <div class="toolbar-divider"></div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <button class="tool" id="portShapeCircleBtn" title="새 포트 기본 모양: 원" style="width:38px;height:30px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="6"/></svg>
+        </button>
+        <button class="tool" id="portShapeSquareBtn" title="새 포트 기본 모양: 사각형" style="width:38px;height:30px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="canvas-wrap tool-select" id="canvasWrap">
+      <div class="library-drawer" id="libraryDrawer">
+        <div class="lib-header">
+          <h3>📦 컴포넌트 라이브러리</h3>
+          <button class="lib-close" id="libClose" title="닫기">✕</button>
+        </div>
+        <div id="libList"></div>
+      </div>
+      <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="dotgrid" width="20" height="20" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="1" fill="var(--canvas-grid)"></circle>
+          </pattern>
+        </defs>
+        <g id="world">
+          <rect id="gridRect" x="-4000" y="-4000" width="8000" height="8000" fill="url(#dotgrid)"></rect>
+          <g id="elementsLayer"></g>
+          <g id="overlayLayer"></g>
+        </g>
+      </svg>
+      <input id="labelEditor" class="mono">
+    </div>
+
+    <div class="panel" id="panel"></div>
+  </div>
+
+  <div class="statusbar">
+    <span id="statusTool" class="mono">선택</span>
+    <span class="sep">|</span>
+    <span id="statusCoords" class="mono">0, 0</span>
+    <span class="sep">|</span>
+    <span id="statusCount" class="mono">요소 0개</span>
+    <div class="spacer"></div>
+    <span id="statusSave" class="mono">자동 저장됨</span>
+  </div>
+</div>
+
+<div class="overlay hidden" id="shortcutsOverlay">
+  <div class="sheet-wrap">
+    <div class="sheet">
+      <button class="sheet-close" id="closeShortcuts">✕</button>
+      <h2>단축키 안내</h2>
+      <p class="sheet-sub">키보드와 마우스로 빠르게 결선도를 그릴 수 있습니다.</p>
+      <table>
+        <tr><td><kbd>V</kbd></td><td>선택 / 이동 도구</td></tr>
+        <tr><td><kbd>P</kbd></td><td>PCB(초록 기판) 배치 — 드래그로 자유 크기 지정, 클릭만 하면 기본 크기로 생성</td></tr>
+        <tr><td><kbd>B</kbd></td><td>부품 박스 배치 (버튼·릴레이·SMPS 등 범용 박스)</td></tr>
+        <tr><td><kbd>W</kbd></td><td>배선 그리기 — 클릭할 때마다 꺾인점 추가, <kbd>더블클릭</kbd> 또는 <kbd>Enter</kbd>로 완료, <kbd>Esc</kbd>로 취소</td></tr>
+        <tr><td><kbd>Shift</kbd> (배선 중)</td><td>직각(가로/세로)으로 꺾어서 연결</td></tr>
+        <tr><td><kbd>T</kbd></td><td>텍스트 라벨 추가</td></tr>
+        <tr><td><kbd>O</kbd></td><td>포트/핀 표시 추가 — 원 또는 사각형, 툴바 하단에서 기본 모양 선택</td></tr>
+        <tr><td><kbd>L</kbd></td><td>배선 범례 박스 추가 — 색상별 배선 의미를 적는 표</td></tr>
+        <tr><td>PCB·박스 생성 직후</td><td>바로 이름을 입력할 수 있도록 편집창이 자동으로 열립니다</td></tr>
+        <tr><td>빈 캔버스 드래그</td><td>마퀴(사각형) 선택 — 여러 요소를 한번에 선택, <kbd>Shift</kbd>+드래그는 기존 선택에 추가</td></tr>
+        <tr><td><kbd>Shift</kbd>+클릭 (요소)</td><td>선택에 추가/제거</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>G</kbd></td><td>선택한 요소들을 그룹으로 묶기 → 이름 붙여 라이브러리에 저장 가능</td></tr>
+        <tr><td>📦 라이브러리</td><td>저장한 그룹을 이름으로 다시 불러오기 (왼쪽 서랍)</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>]</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>]</kbd></td><td>한 단계 앞으로 / 맨 앞으로</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>[</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd></td><td>한 단계 뒤로 / 맨 뒤로</td></tr>
+        <tr><td><kbd>Delete</kbd></td><td>선택한 요소 삭제</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>선택한 요소 복제</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd></td><td>선택한 요소 복사 / 붙여넣기 — 여러 번 붙여넣으면 조금씩 밀려서 놓입니다</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>실행 취소 / 다시 실행</td></tr>
+        <tr><td>방향키</td><td>선택 요소 이동 (<kbd>Shift</kbd>+방향키 = 격자 단위)</td></tr>
+        <tr><td><kbd>1</kbd>~<kbd>6</kbd></td><td>배선 색상 선택 (배선 그리는 중이거나 선택 중일 때)</td></tr>
+        <tr><td><kbd>G</kbd></td><td>격자 스냅 켜기/끄기</td></tr>
+        <tr><td>더블클릭 (도형)</td><td>이름(라벨) 편집</td></tr>
+        <tr><td>더블클릭 (배선 위)</td><td>꺾인점 추가 · 더블클릭(점 위) = 꺾인점 삭제</td></tr>
+        <tr><td>스페이스+드래그 / 휠 클릭 드래그</td><td>화면 이동(패닝)</td></tr>
+        <tr><td>마우스 휠</td><td>확대 / 축소</td></tr>
+        <tr><td><kbd>0</kbd></td><td>전체 내용이 보이도록 맞추기</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>그리기 취소 / 선택 해제</td></tr>
+        <tr><td><kbd>?</kbd></td><td>이 안내 열기/닫기</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+/* ---------------- constants ---------------- */
+const WIRE_COLORS = [
+  {name:'빨강', value:'#dc2626'},
+  {name:'주황', value:'#ea580c'},
+  {name:'황토', value:'#ca8a04'},
+  {name:'초록', value:'#16a34a'},
+  {name:'파랑', value:'#2563eb'},
+  {name:'검정', value:'#1f2937'},
+];
+const BOX_THEMES = [
+  {name:'블루', fill:'#dbeafe', border:'#2563eb', text:'#1e3a5f'},
+  {name:'레드', fill:'#fee2e2', border:'#dc2626', text:'#7f1d1d'},
+  {name:'옐로', fill:'#fef3c7', border:'#d97706', text:'#78350f'},
+  {name:'그린', fill:'#dcfce7', border:'#16a34a', text:'#14532d'},
+  {name:'퍼플', fill:'#ede9fe', border:'#7c3aed', text:'#4c1d95'},
+  {name:'그레이', fill:'#e2e8f0', border:'#475569', text:'#1e293b'},
+];
+const PCB_FILL = '#16a34a';
+const PCB_STROKE = '#14532d';
+const STORAGE_KEY = 'wiring-editor-v1';
+const LIBRARY_KEY = 'wiring-editor-library-v1';
+const HANDLE_NAMES = ['nw','n','ne','w','e','sw','s','se'];
+
+/* ---------------- state ---------------- */
+let idCounter = 1;
+function uid(){ return 'el' + (idCounter++); }
+
+const state = {
+  elements: [],
+  selectedId: null,
+  multiSelect: [],
+  library: [],
+  clipboard: null,
+  pasteCount: 0,
+  tool: 'select',
+  currentColor: WIRE_COLORS[0].value,
+  currentTheme: 0,
+  currentPortShape: 'circle',
+  zoom: 1,
+  pan: {x:60, y:60},
+  grid: 20,
+  snap: true,
+  drawingWire: null,
+  wireRubber: null,
+  drawPreview: null,
+  marqueeRect: null,
+  editingId: null,
+  counts: {pcb:0, box:0, text:0, legend:0, group:0},
+};
+let drag = null;
+let history = [], redoStack = [];
+let spacePressed = false;
+let downloadsCap; // undefined = not checked yet
+
+/* ---------------- dom refs ---------------- */
+const canvasEl = document.getElementById('canvas');
+const canvasWrap = document.getElementById('canvasWrap');
+const world = document.getElementById('world');
+const elementsLayer = document.getElementById('elementsLayer');
+const overlayLayer = document.getElementById('overlayLayer');
+const panelEl = document.getElementById('panel');
+const zoomLabel = document.getElementById('zoomLabel');
+const statusTool = document.getElementById('statusTool');
+const statusCoords = document.getElementById('statusCoords');
+const statusCount = document.getElementById('statusCount');
+const statusSave = document.getElementById('statusSave');
+const labelEditor = document.getElementById('labelEditor');
+const toastEl = document.getElementById('toast');
+const colorPicker = document.getElementById('colorPicker');
+
+/* ---------------- helpers ---------------- */
+function getElement(id){ return state.elements.find(e=>e.id===id); }
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function snap(v){ return Math.round(v/state.grid)*state.grid; }
+function snapPt(p){ return {x:snap(p.x), y:snap(p.y)}; }
+function isTypingTarget(t){ return t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable); }
+function orthoSnap(from, to){
+  const dx = to.x-from.x, dy = to.y-from.y;
+  if(Math.abs(dx) > Math.abs(dy)) return {x:to.x, y:from.y};
+  return {x:from.x, y:to.y};
+}
+function resolvePoint(last, raw, shiftKey){
+  let p = shiftKey ? orthoSnap(last, raw) : raw;
+  if(state.snap) p = snapPt(p);
+  return p;
+}
+function screenToWorld(clientX, clientY){
+  const rect = canvasEl.getBoundingClientRect();
+  const sx = clientX-rect.left, sy = clientY-rect.top;
+  return { x:(sx-state.pan.x)/state.zoom, y:(sy-state.pan.y)/state.zoom };
+}
+function elementBBox(el){
+  if(el.type==='wire'){
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    el.points.forEach(p=>{ minX=Math.min(minX,p.x); minY=Math.min(minY,p.y); maxX=Math.max(maxX,p.x); maxY=Math.max(maxY,p.y); });
+    return {x:minX, y:minY, w:Math.max(0,maxX-minX), h:Math.max(0,maxY-minY)};
+  }
+  if(el.type==='text'){
+    const w = Math.max(40, el.text.length*el.size*0.6);
+    return {x:el.x, y:el.y-el.size, w, h:el.size*1.6};
+  }
+  if(el.type==='port'){
+    const s = el.size||8;
+    const labelW = el.label.length*7+18;
+    return {x:el.x-s, y:el.y-s, w:s*2+labelW, h:s*2};
+  }
+  if(el.type==='legend'){
+    const m = legendMetrics(el);
+    return {x:el.x, y:el.y, w:m.width, h:m.height};
+  }
+  return {x:el.x, y:el.y, w:el.w, h:el.h};
+}
+function rectsIntersect(a,b){
+  return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+}
+function normalizeRect(p1,p2){
+  return {x:Math.min(p1.x,p2.x), y:Math.min(p1.y,p2.y), w:Math.abs(p2.x-p1.x), h:Math.abs(p2.y-p1.y)};
+}
+function applySelectionSet(set){
+  if(set.length===1){ state.selectedId = set[0]; state.multiSelect = []; }
+  else if(set.length>1){ state.selectedId = null; state.multiSelect = set; }
+  else { state.selectedId = null; state.multiSelect = []; }
+}
+function svgEl(tag, attrs){
+  const n = document.createElementNS(SVGNS, tag);
+  for(const k in attrs) n.setAttribute(k, attrs[k]);
+  return n;
+}
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastEl._t);
+  toastEl._t = setTimeout(()=>toastEl.classList.remove('show'), 1700);
+}
+
+/* ---------------- history ---------------- */
+function pushHistory(){
+  history.push(JSON.stringify(state.elements));
+  if(history.length>60) history.shift();
+  redoStack.length = 0;
+}
+function undo(){
+  if(!history.length) return;
+  redoStack.push(JSON.stringify(state.elements));
+  state.elements = JSON.parse(history.pop());
+  state.selectedId = null; state.multiSelect = [];
+  render(); scheduleSave();
+}
+function redo(){
+  if(!redoStack.length) return;
+  history.push(JSON.stringify(state.elements));
+  state.elements = JSON.parse(redoStack.pop());
+  state.selectedId = null; state.multiSelect = [];
+  render(); scheduleSave();
+}
+
+/* ---------------- persistence ---------------- */
+let saveTimer = null;
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({elements:state.elements, counts:state.counts}));
+      statusSave.textContent = '자동 저장됨 · ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+    }catch(e){ statusSave.textContent = '저장 실패(로컬 저장소)'; }
+  }, 400);
+}
+function saveLibrary(){
+  try{ localStorage.setItem(LIBRARY_KEY, JSON.stringify(state.library)); }catch(e){}
+}
+function loadLibrary(){
+  try{
+    const raw = localStorage.getItem(LIBRARY_KEY);
+    state.library = raw ? (JSON.parse(raw) || []) : [];
+  }catch(e){ state.library = []; }
+}
+function loadInitial(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const data = JSON.parse(raw);
+      state.elements = data.elements || [];
+      state.counts = data.counts || state.counts;
+      let maxN = 0;
+      state.elements.forEach(el=>{ const m = /el(\d+)/.exec(el.id); if(m) maxN = Math.max(maxN, Number(m[1])); });
+      idCounter = maxN+1;
+      return;
+    }
+  }catch(e){}
+  seedExample();
+}
+function seedExample(){
+  const pcb = {id:uid(), type:'pcb', x:420, y:120, w:200, h:130, label:'PCB 1'};
+  const box = {id:uid(), type:'box', x:120, y:140, w:150, h:80, label:'전원 SMPS', themeIndex:2};
+  const wire = {id:uid(), type:'wire', points:[{x:270,y:180},{x:340,y:180},{x:340,y:180},{x:420,y:180}], color:'#dc2626', width:3};
+  const txt = {id:uid(), type:'text', x:120, y:260, text:'예시 요소입니다 — 전체지우기로 새로 시작하세요', size:13};
+  state.elements = [pcb, box, wire, txt];
+  state.counts = {pcb:1, box:1, text:0};
+}
+
+/* ---------------- element factories ---------------- */
+function createPcb(x,y,w,h){
+  state.counts.pcb++;
+  return {id:uid(), type:'pcb', x,y,w,h, label:'PCB '+state.counts.pcb, labelSize:13};
+}
+function createBox(x,y,w,h){
+  state.counts.box++;
+  return {id:uid(), type:'box', x,y,w,h, label:'구성요소 '+state.counts.box, themeIndex: state.currentTheme, labelSize:12.5};
+}
+function createText(x,y){
+  state.counts.text++;
+  return {id:uid(), type:'text', x,y, text:'텍스트', size:16};
+}
+
+/* ---------------- tool switching ---------------- */
+function setTool(name){
+  if(state.tool==='wire' && state.drawingWire){ state.drawingWire=null; state.wireRubber=null; }
+  state.tool = name;
+  canvasWrap.classList.toggle('tool-select', name==='select');
+  canvasWrap.classList.toggle('tool-draw', name!=='select');
+  document.querySelectorAll('.tool').forEach(b=>b.classList.toggle('active', b.dataset.tool===name));
+  statusTool.textContent = {select:'선택',pcb:'PCB 배치',box:'부품 배치',wire:'배선 그리기',text:'텍스트',port:'포트/핀 배치',legend:'범례 배치'}[name] || name;
+  render();
+}
+
+/* ================= RENDER ================= */
+function render(){
+  elementsLayer.innerHTML = '';
+  overlayLayer.innerHTML = '';
+
+  state.elements.forEach(el=>{
+    elementsLayer.appendChild(buildElementNode(el));
+  });
+
+  if(state.drawPreview) overlayLayer.appendChild(buildPreviewRect(state.drawPreview));
+  if(state.drawingWire) overlayLayer.appendChild(buildWireDraft(state.drawingWire, state.wireRubber));
+
+  if(state.tool==='select'){
+    if(state.multiSelect.length>1){
+      overlayLayer.appendChild(buildMultiSelectOverlay(state.multiSelect));
+    } else {
+      const sel = getElement(state.selectedId);
+      if(sel) overlayLayer.appendChild(buildSelectionOverlay(sel));
+    }
+  }
+  if(state.marqueeRect) overlayLayer.appendChild(buildMarqueeRect(state.marqueeRect));
+
+  world.setAttribute('transform', 'translate('+state.pan.x+' '+state.pan.y+') scale('+state.zoom+')');
+  zoomLabel.textContent = Math.round(state.zoom*100)+'%';
+  statusCount.textContent = '요소 ' + state.elements.length + '개';
+  document.getElementById('btnUndo').disabled = history.length===0;
+  document.getElementById('btnRedo').disabled = redoStack.length===0;
+
+  buildSwatchRow(colorPicker, WIRE_COLORS.map(c=>c.value), state.currentColor, v=>{ state.currentColor=v; render(); });
+  document.getElementById('portShapeCircleBtn').classList.toggle('active', state.currentPortShape==='circle');
+  document.getElementById('portShapeSquareBtn').classList.toggle('active', state.currentPortShape==='square');
+  updatePropertyPanel();
+}
+
+function buildElementNode(el){
+  if(el.type==='pcb') return buildPcbNode(el);
+  if(el.type==='box') return buildBoxNode(el);
+  if(el.type==='text') return buildTextNode(el);
+  if(el.type==='wire') return buildWireNode(el);
+  if(el.type==='port') return buildPortNode(el);
+  if(el.type==='legend') return buildLegendNode(el);
+  if(el.type==='group') return buildGroupNode(el);
+  return svgEl('g',{});
+}
+
+function buildGroupNode(el){
+  const g = svgEl('g',{'data-role':'element','data-id':el.id});
+  g.appendChild(svgEl('rect',{x:el.x,y:el.y,width:el.w,height:el.h,fill:'#ffffff','fill-opacity':0,'pointer-events':'all'}));
+  const inner = svgEl('g',{transform:'translate('+el.x+' '+el.y+')','pointer-events':'none'});
+  el.children.forEach(child=>inner.appendChild(buildElementNode(child)));
+  g.appendChild(inner);
+  g.appendChild(svgEl('rect',{x:el.x-4,y:el.y-4,width:el.w+8,height:el.h+8,fill:'none',stroke:'#c7cad1','stroke-width':1.2,'stroke-dasharray':'3 3','pointer-events':'none'}));
+  const label = svgEl('text',{x:el.x+2,y:el.y-9,fill:'#5b6270','font-family':"'JetBrains Mono',monospace",'font-size':10.5,'font-weight':700,'pointer-events':'none'});
+  label.textContent = '▣ ' + el.label;
+  g.appendChild(label);
+  return g;
+}
+
+function buildPortNode(el){
+  const g = svgEl('g',{'data-role':'element','data-id':el.id});
+  const s = el.size || 8;
+  if(el.shape==='square'){
+    g.appendChild(svgEl('rect',{x:el.x-s,y:el.y-s,width:s*2,height:s*2,rx:2,fill:el.color,stroke:'#20242b','stroke-width':1.6}));
+  } else {
+    g.appendChild(svgEl('circle',{cx:el.x,cy:el.y,r:s,fill:el.color,stroke:'#20242b','stroke-width':1.6}));
+  }
+  const t = svgEl('text',{x:el.x+s+7,y:el.y,'dominant-baseline':'middle',
+    fill:'#20242b','font-family':"'JetBrains Mono',monospace",'font-size':12,'font-weight':600});
+  t.textContent = el.label;
+  g.appendChild(t);
+  return g;
+}
+
+function legendMetrics(el){
+  const rowH=22, padTop=34, padBottom=12, padX=14, width=230;
+  const height = padTop + el.rows.length*rowH + padBottom;
+  return {rowH,padTop,padBottom,padX,width,height};
+}
+function buildLegendNode(el){
+  const m = legendMetrics(el);
+  const g = svgEl('g',{'data-role':'element','data-id':el.id});
+  g.appendChild(svgEl('rect',{x:el.x,y:el.y,width:m.width,height:m.height,rx:6,fill:'#ffffff',stroke:'#9aa0ab','stroke-width':1.4}));
+  const title = svgEl('text',{x:el.x+m.padX,y:el.y+20,fill:'#20242b','font-family':"'JetBrains Mono',monospace",'font-size':12.5,'font-weight':700});
+  title.textContent = el.title || '배선 범례';
+  g.appendChild(title);
+  g.appendChild(svgEl('line',{x1:el.x+m.padX,y1:el.y+26,x2:el.x+m.width-m.padX,y2:el.y+26,stroke:'#e2e2de','stroke-width':1}));
+  el.rows.forEach((row,i)=>{
+    const ry = el.y+m.padTop+i*m.rowH+4;
+    g.appendChild(svgEl('line',{x1:el.x+m.padX,y1:ry+4,x2:el.x+m.padX+22,y2:ry+4,stroke:row.color,'stroke-width':4,'stroke-linecap':'round'}));
+    const t = svgEl('text',{x:el.x+m.padX+30,y:ry+8,fill: row.text ? '#20242b' : '#9aa0ab',
+      'font-family':"'JetBrains Mono',monospace",'font-size':11.5});
+    t.textContent = row.text ? row.text : '설명 없음';
+    g.appendChild(t);
+  });
+  return g;
+}
+
+function buildPcbNode(el){
+  const g = svgEl('g',{'data-role':'element','data-id':el.id});
+  g.appendChild(svgEl('rect',{x:el.x,y:el.y,width:el.w,height:el.h,rx:4,fill:PCB_FILL,stroke:PCB_STROKE,'stroke-width':2}));
+  if(el.w>44 && el.h>34){
+    const off = Math.max(8, Math.min(12, el.w*0.09, el.h*0.14));
+    [[el.x+off,el.y+off],[el.x+el.w-off,el.y+off],[el.x+off,el.y+el.h-off],[el.x+el.w-off,el.y+el.h-off]].forEach(p=>{
+      g.appendChild(svgEl('circle',{cx:p[0],cy:p[1],r:3.4,fill:'#e8f6ec',stroke:PCB_STROKE,'stroke-width':1.2}));
+    });
+  }
+  const t = svgEl('text',{x:el.x+el.w/2,y:el.y+el.h/2,'text-anchor':'middle','dominant-baseline':'middle',
+    fill:'#f4fbf6','font-family':"'JetBrains Mono',monospace",'font-size':el.labelSize||13,'font-weight':600});
+  t.textContent = el.label;
+  g.appendChild(t);
+  return g;
+}
+
+function buildBoxNode(el){
+  const theme = BOX_THEMES[el.themeIndex||0];
+  const g = svgEl('g',{'data-role':'element','data-id':el.id});
+  g.appendChild(svgEl('rect',{x:el.x,y:el.y,width:el.w,height:el.h,rx:7,fill:theme.fill,stroke:theme.border,'stroke-width':2}));
+  const t = svgEl('text',{x:el.x+el.w/2,y:el.y+el.h/2,'text-anchor':'middle','dominant-baseline':'middle',
+    fill:theme.text,'font-family':"'JetBrains Mono',monospace",'font-size':el.labelSize||12.5,'font-weight':600});
+  t.textContent = el.label;
+  g.appendChild(t);
+  return g;
+}
+
+function buildTextNode(el){
+  const g = svgEl('g',{'data-role':'element','data-id':el.id});
+  const t = svgEl('text',{x:el.x,y:el.y,fill:'#20242b','font-family':"'JetBrains Mono',monospace",'font-size':el.size,'font-weight':600});
+  t.textContent = el.text;
+  g.appendChild(t);
+  return g;
+}
+
+function buildWireNode(el){
+  const g = svgEl('g',{'data-role':'element','data-id':el.id});
+  const ptsStr = el.points.map(p=>p.x+','+p.y).join(' ');
+  g.appendChild(svgEl('polyline',{points:ptsStr, fill:'none', stroke:'transparent', 'stroke-width':el.width+14, 'stroke-linecap':'round','stroke-linejoin':'round'}));
+  g.appendChild(svgEl('polyline',{points:ptsStr, fill:'none', stroke:el.color, 'stroke-width':el.width, 'stroke-linecap':'round','stroke-linejoin':'round'}));
+  const first = el.points[0], last = el.points[el.points.length-1];
+  [first,last].forEach(p=>{
+    g.appendChild(svgEl('circle',{cx:p.x,cy:p.y,r:4.2,fill:el.color,stroke:'#f6f5f1','stroke-width':1.4}));
+  });
+  return g;
+}
+
+function buildPreviewRect(p){
+  const g = svgEl('g',{});
+  g.appendChild(svgEl('rect',{x:p.x,y:p.y,width:p.w,height:p.h,fill:'var(--accent-soft)',stroke:'var(--accent)','stroke-width':1.5,'stroke-dasharray':'5 4','pointer-events':'none'}));
+  return g;
+}
+
+function buildWireDraft(draft, rubber){
+  const g = svgEl('g',{});
+  const ptsStr = draft.points.map(p=>p.x+','+p.y).join(' ');
+  g.appendChild(svgEl('polyline',{points:ptsStr, fill:'none', stroke:draft.color, 'stroke-width':draft.width, 'stroke-linecap':'round','stroke-linejoin':'round','pointer-events':'none'}));
+  draft.points.forEach(p=>{
+    g.appendChild(svgEl('circle',{cx:p.x,cy:p.y,r:3.5,fill:draft.color,stroke:'var(--canvas-bg)','stroke-width':1.2,'pointer-events':'none'}));
+  });
+  if(rubber){
+    const last = draft.points[draft.points.length-1];
+    g.appendChild(svgEl('line',{x1:last.x,y1:last.y,x2:rubber.x,y2:rubber.y,stroke:draft.color,'stroke-width':draft.width,'stroke-dasharray':'4 4','pointer-events':'none',opacity:0.75}));
+  }
+  return g;
+}
+
+function cursorForHandle(name){
+  if(name==='nw'||name==='se') return 'nwse-resize';
+  if(name==='ne'||name==='sw') return 'nesw-resize';
+  if(name==='n'||name==='s') return 'ns-resize';
+  return 'ew-resize';
+}
+
+function buildSelectionOverlay(el){
+  const g = svgEl('g',{});
+  if(el.type==='pcb' || el.type==='box'){
+    g.appendChild(svgEl('rect',{x:el.x-3,y:el.y-3,width:el.w+6,height:el.h+6,fill:'none',stroke:'var(--accent)','stroke-width':1.5/state.zoom,'stroke-dasharray':(4/state.zoom)+' '+(3/state.zoom),'pointer-events':'none'}));
+    const hs = 9/state.zoom;
+    const pos = {
+      nw:[el.x,el.y], n:[el.x+el.w/2,el.y], ne:[el.x+el.w,el.y],
+      w:[el.x,el.y+el.h/2], e:[el.x+el.w,el.y+el.h/2],
+      sw:[el.x,el.y+el.h], s:[el.x+el.w/2,el.y+el.h], se:[el.x+el.w,el.y+el.h],
+    };
+    HANDLE_NAMES.forEach(name=>{
+      const p = pos[name];
+      const r = svgEl('rect',{x:p[0]-hs/2,y:p[1]-hs/2,width:hs,height:hs,fill:'var(--panel-bg)',stroke:'var(--accent)','stroke-width':1.6/state.zoom});
+      r.dataset.role='handle'; r.dataset.id=el.id; r.dataset.handle=name;
+      r.style.cursor = cursorForHandle(name);
+      g.appendChild(r);
+    });
+  } else if(el.type==='wire'){
+    for(let i=0;i<el.points.length-1;i++){
+      const a=el.points[i], b=el.points[i+1];
+      const hit = svgEl('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'transparent','stroke-width':16/state.zoom});
+      hit.dataset.role='segment'; hit.dataset.id=el.id; hit.dataset.index=i;
+      hit.style.cursor='crosshair';
+      g.appendChild(hit);
+    }
+    el.points.forEach((p,i)=>{
+      const c = svgEl('circle',{cx:p.x,cy:p.y,r:6.5/state.zoom,fill:'var(--panel-bg)',stroke:'var(--accent)','stroke-width':2/state.zoom});
+      c.dataset.role='vertex'; c.dataset.id=el.id; c.dataset.index=i;
+      c.style.cursor='pointer';
+      g.appendChild(c);
+    });
+  } else if(el.type==='text'){
+    const w = Math.max(40, el.text.length*el.size*0.56)+10;
+    g.appendChild(svgEl('rect',{x:el.x-5,y:el.y-el.size*0.95,width:w,height:el.size*1.5,fill:'none',stroke:'var(--accent)','stroke-width':1.5/state.zoom,'stroke-dasharray':(4/state.zoom)+' '+(3/state.zoom),'pointer-events':'none'}));
+  } else if(el.type==='port'){
+    const s=(el.size||8)+5;
+    g.appendChild(svgEl('rect',{x:el.x-s,y:el.y-s,width:s*2,height:s*2,fill:'none',stroke:'var(--accent)','stroke-width':1.5/state.zoom,'stroke-dasharray':(4/state.zoom)+' '+(3/state.zoom),'pointer-events':'none'}));
+  } else if(el.type==='legend'){
+    const m = legendMetrics(el);
+    g.appendChild(svgEl('rect',{x:el.x-3,y:el.y-3,width:m.width+6,height:m.height+6,fill:'none',stroke:'var(--accent)','stroke-width':1.5/state.zoom,'stroke-dasharray':(4/state.zoom)+' '+(3/state.zoom),'pointer-events':'none'}));
+  } else if(el.type==='group'){
+    g.appendChild(svgEl('rect',{x:el.x-4,y:el.y-4,width:el.w+8,height:el.h+8,fill:'none',stroke:'var(--accent)','stroke-width':1.6/state.zoom,'stroke-dasharray':(4/state.zoom)+' '+(3/state.zoom),'pointer-events':'none'}));
+  }
+  return g;
+}
+
+function buildMultiSelectOverlay(ids){
+  const g = svgEl('g',{});
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  ids.forEach(id=>{
+    const el = getElement(id);
+    if(!el) return;
+    const b = elementBBox(el);
+    g.appendChild(svgEl('rect',{x:b.x-2,y:b.y-2,width:b.w+4,height:b.h+4,fill:'none',stroke:'var(--accent-2)','stroke-width':1.2/state.zoom,'stroke-dasharray':(3/state.zoom)+' '+(3/state.zoom),'pointer-events':'none'}));
+    minX=Math.min(minX,b.x); minY=Math.min(minY,b.y); maxX=Math.max(maxX,b.x+b.w); maxY=Math.max(maxY,b.y+b.h);
+  });
+  if(minX===Infinity) return g;
+  g.appendChild(svgEl('rect',{x:minX-8,y:minY-8,width:(maxX-minX)+16,height:(maxY-minY)+16,fill:'rgba(62,163,255,0.07)',stroke:'var(--accent-2)','stroke-width':1.5/state.zoom,'stroke-dasharray':(5/state.zoom)+' '+(4/state.zoom),'pointer-events':'none'}));
+  return g;
+}
+
+function buildMarqueeRect(r){
+  const g = svgEl('g',{});
+  g.appendChild(svgEl('rect',{x:r.x,y:r.y,width:r.w,height:r.h,fill:'rgba(62,163,255,0.1)',stroke:'var(--accent-2)','stroke-width':1.2/state.zoom,'stroke-dasharray':(4/state.zoom)+' '+(3/state.zoom),'pointer-events':'none'}));
+  return g;
+}
+
+/* ================= pointer interaction ================= */
+function onPointerDown(e){
+  if(e.button===1 || (e.button===0 && spacePressed)){
+    drag = {type:'pan', startScreen:{x:e.clientX,y:e.clientY}, startPan:{x:state.pan.x,y:state.pan.y}};
+    canvasEl.style.cursor='grabbing';
+    e.preventDefault();
+    return;
+  }
+  if(e.button!==0) return;
+  const pt = screenToWorld(e.clientX, e.clientY);
+  const targetEl = e.target.closest('[data-role]');
+  const role = targetEl && targetEl.dataset.role;
+  const id = targetEl && targetEl.dataset.id;
+
+  if(state.tool==='select'){
+    if(role==='handle'){
+      const el = getElement(id);
+      state.multiSelect = [];
+      pushHistory();
+      drag = {type:'resize', id, handle:targetEl.dataset.handle, startPt:pt, orig:{x:el.x,y:el.y,w:el.w,h:el.h}};
+      return;
+    }
+    if(role==='vertex'){
+      state.multiSelect = [];
+      pushHistory();
+      drag = {type:'vertex', id, index:Number(targetEl.dataset.index)};
+      return;
+    }
+    if(role==='segment' || role==='element'){
+      if(e.shiftKey){
+        let set = state.multiSelect.length ? [...state.multiSelect] : (state.selectedId ? [state.selectedId] : []);
+        set = set.includes(id) ? set.filter(x=>x!==id) : [...set, id];
+        applySelectionSet(set);
+        render();
+        return;
+      }
+      if(state.multiSelect.length>1 && state.multiSelect.includes(id)){
+        pushHistory();
+        const ids = [...state.multiSelect];
+        const origMap = {};
+        ids.forEach(mid=>{
+          const mel = getElement(mid);
+          if(!mel) return;
+          origMap[mid] = mel.type==='wire' ? {points: mel.points.map(p=>({x:p.x,y:p.y}))} : {x:mel.x, y:mel.y};
+        });
+        drag = {type:'multimove', ids, startPt:pt, origMap};
+        return;
+      }
+      applySelectionSet([id]);
+      const el = getElement(id);
+      pushHistory();
+      const orig = el.type==='wire' ? {points: el.points.map(p=>({x:p.x,y:p.y}))} : {x:el.x, y:el.y};
+      drag = {type:'move', id, startPt:pt, orig};
+      render();
+      return;
+    }
+    drag = {type:'marquee', start:pt, additive:e.shiftKey};
+    state.marqueeRect = {x:pt.x, y:pt.y, w:0, h:0};
+    render();
+    return;
+  }
+
+  if(state.tool==='pcb' || state.tool==='box'){
+    pushHistory();
+    drag = {type:'draw-rect', kind:state.tool, start:pt};
+    state.drawPreview = {kind:state.tool, x:pt.x, y:pt.y, w:0, h:0};
+    render();
+    return;
+  }
+
+  if(state.tool==='text'){
+    pushHistory();
+    const el = createText(pt.x, pt.y);
+    state.elements.push(el);
+    state.selectedId = el.id;
+    state.multiSelect = [];
+    setTool('select');
+    openLabelEditor(el.id, true);
+    return;
+  }
+
+  if(state.tool==='port'){
+    pushHistory();
+    const el = {id:uid(), type:'port', x:pt.x, y:pt.y, shape:state.currentPortShape, color:state.currentColor, size:8, label:'포트'};
+    state.elements.push(el);
+    state.selectedId = el.id;
+    state.multiSelect = [];
+    setTool('select');
+    openLabelEditor(el.id, true);
+    return;
+  }
+
+  if(state.tool==='legend'){
+    pushHistory();
+    state.counts.legend = (state.counts.legend||0)+1;
+    const el = {id:uid(), type:'legend', x:pt.x, y:pt.y,
+      title: state.counts.legend>1 ? '배선 범례 '+state.counts.legend : '배선 범례',
+      rows: WIRE_COLORS.map(c=>({color:c.value, text:''}))};
+    state.elements.push(el);
+    state.selectedId = el.id;
+    state.multiSelect = [];
+    setTool('select');
+    scheduleSave();
+    return;
+  }
+
+  if(state.tool==='wire'){
+    if(!state.drawingWire){
+      pushHistory();
+      const p0 = state.snap ? snapPt(pt) : pt;
+      state.drawingWire = {points:[p0], color:state.currentColor, width:3};
+    } else {
+      const last = state.drawingWire.points[state.drawingWire.points.length-1];
+      state.drawingWire.points.push(resolvePoint(last, pt, e.shiftKey));
+    }
+    render();
+    return;
+  }
+}
+
+function onPointerMove(e){
+  const pt = screenToWorld(e.clientX, e.clientY);
+  statusCoords.textContent = Math.round(pt.x) + ', ' + Math.round(pt.y);
+  if(drag){
+    if(drag.type==='pan'){
+      state.pan.x = drag.startPan.x + (e.clientX-drag.startScreen.x);
+      state.pan.y = drag.startPan.y + (e.clientY-drag.startScreen.y);
+      world.setAttribute('transform', 'translate('+state.pan.x+' '+state.pan.y+') scale('+state.zoom+')');
+      return;
+    }
+    if(drag.type==='draw-rect'){
+      const x=Math.min(drag.start.x,pt.x), y=Math.min(drag.start.y,pt.y);
+      const w=Math.abs(pt.x-drag.start.x), h=Math.abs(pt.y-drag.start.y);
+      state.drawPreview = {kind:drag.kind, x, y, w, h};
+      render();
+      return;
+    }
+    if(drag.type==='move'){
+      const el = getElement(drag.id);
+      if(el){
+        const dx = pt.x-drag.startPt.x, dy = pt.y-drag.startPt.y;
+        if(el.type==='wire'){
+          el.points = drag.orig.points.map(p=>({x:p.x+dx,y:p.y+dy}));
+        } else {
+          let nx = drag.orig.x+dx, ny = drag.orig.y+dy;
+          if(state.snap){ nx=snap(nx); ny=snap(ny); }
+          el.x=nx; el.y=ny;
+        }
+        render();
+      }
+      return;
+    }
+    if(drag.type==='resize'){
+      const el = getElement(drag.id);
+      if(el){
+        const dx = pt.x-drag.startPt.x, dy = pt.y-drag.startPt.y;
+        const r = computeResize(drag.orig, drag.handle, dx, dy);
+        el.x=r.x; el.y=r.y; el.w=r.w; el.h=r.h;
+        render();
+      }
+      return;
+    }
+    if(drag.type==='vertex'){
+      const el = getElement(drag.id);
+      if(el){
+        let p = pt;
+        if(e.shiftKey){
+          const ref = el.points[drag.index-1] || el.points[drag.index+1];
+          if(ref) p = orthoSnap(ref, pt);
+        }
+        if(state.snap) p = snapPt(p);
+        el.points[drag.index] = p;
+        render();
+      }
+      return;
+    }
+    if(drag.type==='multimove'){
+      const dx = pt.x-drag.startPt.x, dy = pt.y-drag.startPt.y;
+      drag.ids.forEach(mid=>{
+        const mel = getElement(mid);
+        const orig = drag.origMap[mid];
+        if(!mel || !orig) return;
+        if(mel.type==='wire'){
+          mel.points = orig.points.map(p=>({x:p.x+dx,y:p.y+dy}));
+        } else {
+          let nx = orig.x+dx, ny = orig.y+dy;
+          if(state.snap){ nx=snap(nx); ny=snap(ny); }
+          mel.x=nx; mel.y=ny;
+        }
+      });
+      render();
+      return;
+    }
+    if(drag.type==='marquee'){
+      state.marqueeRect = normalizeRect(drag.start, pt);
+      render();
+      return;
+    }
+  } else if(state.tool==='wire' && state.drawingWire){
+    const last = state.drawingWire.points[state.drawingWire.points.length-1];
+    state.wireRubber = resolvePoint(last, pt, e.shiftKey);
+    render();
+  }
+}
+
+function onPointerUp(e){
+  if(!drag) return;
+  if(drag.type==='pan'){
+    canvasEl.style.cursor = spacePressed ? 'grab' : '';
+    drag=null;
+    return;
+  }
+  if(drag.type==='draw-rect'){
+    const pt = screenToWorld(e.clientX, e.clientY);
+    finalizeDrawRect(drag.kind, drag.start, pt);
+    drag=null;
+    return;
+  }
+  if(drag.type==='marquee'){
+    const rect = state.marqueeRect;
+    state.marqueeRect = null;
+    const hits = state.elements.filter(el=>rectsIntersect(rect, elementBBox(el))).map(el=>el.id);
+    let set;
+    if(drag.additive){
+      const base = state.multiSelect.length ? [...state.multiSelect] : (state.selectedId ? [state.selectedId] : []);
+      set = [...base];
+      hits.forEach(id=>{ if(!set.includes(id)) set.push(id); });
+    } else {
+      set = hits;
+    }
+    applySelectionSet(set);
+    drag=null;
+    render();
+    return;
+  }
+  drag=null;
+  scheduleSave();
+}
+
+function computeResize(orig, handle, dx, dy){
+  let {x,y,w,h} = orig;
+  const min=20;
+  if(handle.indexOf('e')>=0) w = Math.max(min, orig.w+dx);
+  if(handle.indexOf('s')>=0) h = Math.max(min, orig.h+dy);
+  if(handle.indexOf('w')>=0){ w = Math.max(min, orig.w-dx); x = orig.x + (orig.w-w); }
+  if(handle.indexOf('n')>=0){ h = Math.max(min, orig.h-dy); y = orig.y + (orig.h-h); }
+  if(state.snap){ x=snap(x); y=snap(y); w=Math.max(min,snap(w)); h=Math.max(min,snap(h)); }
+  return {x,y,w,h};
+}
+
+function finalizeDrawRect(kind, start, end){
+  let x=Math.min(start.x,end.x), y=Math.min(start.y,end.y);
+  let w=Math.abs(end.x-start.x), h=Math.abs(end.y-start.y);
+  if(w<6 && h<6){
+    w = kind==='pcb' ? 160 : 150;
+    h = kind==='pcb' ? 100 : 74;
+    x = start.x; y = start.y;
+  }
+  if(state.snap){ x=snap(x); y=snap(y); w=Math.max(20,snap(w)); h=Math.max(20,snap(h)); }
+  const el = kind==='pcb' ? createPcb(x,y,w,h) : createBox(x,y,w,h);
+  state.elements.push(el);
+  state.selectedId = el.id;
+  state.multiSelect = [];
+  state.drawPreview = null;
+  setTool('select');
+  scheduleSave();
+  openLabelEditor(el.id, true);
+}
+
+function finalizeWire(){
+  if(!state.drawingWire || state.drawingWire.points.length<2){
+    state.drawingWire=null; state.wireRubber=null; render();
+    return;
+  }
+  const el = {id:uid(), type:'wire', points:state.drawingWire.points.map(p=>({x:p.x,y:p.y})), color:state.drawingWire.color, width:state.drawingWire.width};
+  state.elements.push(el);
+  state.selectedId = el.id;
+  state.multiSelect = [];
+  state.drawingWire=null; state.wireRubber=null;
+  setTool('select');
+  scheduleSave();
+}
+
+canvasEl.addEventListener('pointerdown', onPointerDown);
+window.addEventListener('pointermove', onPointerMove);
+window.addEventListener('pointerup', onPointerUp);
+
+canvasEl.addEventListener('dblclick', e=>{
+  if(state.tool==='wire' && state.drawingWire){ finalizeWire(); return; }
+  const t = e.target.closest('[data-role]');
+  if(!t) return;
+  if(t.dataset.role==='element'){
+    const el = getElement(t.dataset.id);
+    if(el && (el.type==='pcb'||el.type==='box'||el.type==='text'||el.type==='group')) openLabelEditor(el.id);
+    return;
+  }
+  if(t.dataset.role==='vertex'){
+    const el = getElement(t.dataset.id);
+    if(el && el.points.length>2){
+      pushHistory();
+      el.points.splice(Number(t.dataset.index),1);
+      render(); scheduleSave();
+    }
+    return;
+  }
+  if(t.dataset.role==='segment'){
+    const el = getElement(t.dataset.id);
+    if(el){
+      pushHistory();
+      const pt = screenToWorld(e.clientX,e.clientY);
+      const p = state.snap ? snapPt(pt) : pt;
+      el.points.splice(Number(t.dataset.index)+1, 0, p);
+      render(); scheduleSave();
+    }
+  }
+});
+
+canvasEl.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const rect = canvasEl.getBoundingClientRect();
+  const mx = e.clientX-rect.left, my = e.clientY-rect.top;
+  const wx = (mx-state.pan.x)/state.zoom, wy = (my-state.pan.y)/state.zoom;
+  const factor = Math.exp(-e.deltaY*0.0012);
+  const nz = clamp(state.zoom*factor, 0.2, 4);
+  state.zoom = nz;
+  state.pan.x = mx - wx*nz;
+  state.pan.y = my - wy*nz;
+  render();
+}, {passive:false});
+
+/* ---------------- label editing ---------------- */
+function openLabelEditor(id, selectAll){
+  const el = getElement(id);
+  if(!el) return;
+  state.editingId = id;
+  const rect = canvasEl.getBoundingClientRect();
+  let wx, wy, ww;
+  if(el.type==='text'){ wx = el.x; wy = el.y-el.size; ww = Math.max(80, el.text.length*el.size*0.6+20); }
+  else if(el.type==='port'){ const s = el.size||8; wx = el.x+s+6; wy = el.y-11; ww = Math.max(70, el.label.length*8+24); }
+  else { wx = el.x; wy = el.y+el.h/2-11; ww = el.w; }
+  const screenX = wx*state.zoom + state.pan.x;
+  const screenY = wy*state.zoom + state.pan.y;
+  labelEditor.style.left = screenX+'px';
+  labelEditor.style.top = screenY+'px';
+  labelEditor.style.width = Math.max(60, ww*state.zoom)+'px';
+  labelEditor.style.fontSize = (13*state.zoom)+'px';
+  labelEditor.style.display = 'block';
+  labelEditor.value = el.type==='text' ? el.text : el.label;
+  labelEditor.focus();
+  if(selectAll) labelEditor.select(); else labelEditor.select();
+}
+function commitLabelEditor(){
+  if(!state.editingId){ return; }
+  const el = getElement(state.editingId);
+  if(el){
+    pushHistory();
+    const v = labelEditor.value.trim() || (el.type==='text' ? '텍스트' : el.label);
+    if(el.type==='text') el.text = v; else el.label = v;
+    scheduleSave();
+  }
+  state.editingId = null;
+  labelEditor.style.display='none';
+  render();
+}
+function cancelLabelEditor(){
+  state.editingId = null;
+  labelEditor.style.display='none';
+}
+labelEditor.addEventListener('keydown', e=>{
+  e.stopPropagation();
+  if(e.key==='Enter'){ e.preventDefault(); commitLabelEditor(); }
+  else if(e.key==='Escape'){ e.preventDefault(); cancelLabelEditor(); }
+});
+labelEditor.addEventListener('blur', ()=>{ if(state.editingId) commitLabelEditor(); });
+
+/* ---------------- selection helpers ---------------- */
+function currentSelectionIds(){
+  return state.multiSelect.length ? state.multiSelect : (state.selectedId ? [state.selectedId] : []);
+}
+function deleteSelected(){
+  const ids = currentSelectionIds();
+  if(!ids.length) return;
+  pushHistory();
+  state.elements = state.elements.filter(e=>!ids.includes(e.id));
+  state.selectedId = null; state.multiSelect = [];
+  render(); scheduleSave();
+}
+function duplicateSelected(){
+  const ids = currentSelectionIds();
+  if(!ids.length) return;
+  pushHistory();
+  const newIds = [];
+  ids.forEach(id=>{
+    const el = getElement(id);
+    if(!el) return;
+    const clone = JSON.parse(JSON.stringify(el));
+    clone.id = uid();
+    if(clone.type==='wire') clone.points = clone.points.map(p=>({x:p.x+20,y:p.y+20}));
+    else { clone.x += 20; clone.y += 20; }
+    state.elements.push(clone);
+    newIds.push(clone.id);
+  });
+  applySelectionSet(newIds);
+  render(); scheduleSave();
+}
+function copySelection(){
+  const ids = currentSelectionIds();
+  if(!ids.length) return;
+  const els = ids.map(getElement).filter(Boolean);
+  state.clipboard = JSON.parse(JSON.stringify(els));
+  state.pasteCount = 0;
+  toast(els.length>1 ? els.length+'개 복사됨' : '복사됨');
+}
+function pasteClipboard(){
+  if(!state.clipboard || !state.clipboard.length) return;
+  pushHistory();
+  state.pasteCount = (state.pasteCount||0) + 1;
+  const offset = 20 * state.pasteCount;
+  const newIds = [];
+  state.clipboard.forEach(src=>{
+    const clone = JSON.parse(JSON.stringify(src));
+    clone.id = uid();
+    if(clone.type==='wire') clone.points = clone.points.map(p=>({x:p.x+offset, y:p.y+offset}));
+    else { clone.x += offset; clone.y += offset; }
+    state.elements.push(clone);
+    newIds.push(clone.id);
+  });
+  applySelectionSet(newIds);
+  render(); scheduleSave();
+  toast(newIds.length>1 ? newIds.length+'개 붙여넣기' : '붙여넣기');
+}
+function nudgeSelected(key, shift){
+  const ids = currentSelectionIds();
+  if(!ids.length) return;
+  pushHistory();
+  const step = shift ? state.grid : 1;
+  const dx = key==='ArrowLeft' ? -step : key==='ArrowRight' ? step : 0;
+  const dy = key==='ArrowUp' ? -step : key==='ArrowDown' ? step : 0;
+  ids.forEach(id=>{
+    const el = getElement(id);
+    if(!el) return;
+    if(el.type==='wire') el.points = el.points.map(p=>({x:p.x+dx,y:p.y+dy}));
+    else { el.x+=dx; el.y+=dy; }
+  });
+  render(); scheduleSave();
+}
+function setColorByIndex(i){
+  if(i<0 || i>=WIRE_COLORS.length) return;
+  state.currentColor = WIRE_COLORS[i].value;
+  const ids = currentSelectionIds();
+  let changed = false;
+  ids.forEach(id=>{
+    const el = getElement(id);
+    if(el && (el.type==='wire' || el.type==='port')){
+      if(!changed){ pushHistory(); changed = true; }
+      el.color = state.currentColor;
+    }
+  });
+  if(changed) scheduleSave();
+  render();
+}
+function toggleSnap(){
+  state.snap = !state.snap;
+  toast(state.snap ? '격자 스냅 켜짐' : '격자 스냅 꺼짐');
+  render();
+}
+
+/* ---------------- zoom / view ---------------- */
+function zoomBy(factor){
+  const rect = canvasEl.getBoundingClientRect();
+  const cx = rect.width/2, cy = rect.height/2;
+  const wx = (cx-state.pan.x)/state.zoom, wy = (cy-state.pan.y)/state.zoom;
+  state.zoom = clamp(state.zoom*factor, 0.2, 4);
+  state.pan.x = cx - wx*state.zoom;
+  state.pan.y = cy - wy*state.zoom;
+  render();
+}
+function computeContentBBox(margin){
+  margin = margin||60;
+  if(!state.elements.length) return {x:0,y:0,w:600,h:400};
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  state.elements.forEach(el=>{
+    const b = elementBBox(el);
+    minX=Math.min(minX,b.x); minY=Math.min(minY,b.y);
+    maxX=Math.max(maxX,b.x+b.w); maxY=Math.max(maxY,b.y+b.h);
+  });
+  return {x:minX-margin, y:minY-margin, w:(maxX-minX)+margin*2, h:(maxY-minY)+margin*2};
+}
+function fitToContent(){
+  const b = computeContentBBox(60);
+  const rect = canvasEl.getBoundingClientRect();
+  const zx = rect.width/b.w, zy = rect.height/b.h;
+  state.zoom = clamp(Math.min(zx,zy), 0.2, 3);
+  state.pan.x = -b.x*state.zoom + (rect.width - b.w*state.zoom)/2;
+  state.pan.y = -b.y*state.zoom + (rect.height - b.h*state.zoom)/2;
+  render();
+}
+
+/* ---------------- z-order ---------------- */
+function reorderSelection(direction){
+  const ids = currentSelectionIds();
+  if(!ids.length) return;
+  pushHistory();
+  const idSet = new Set(ids);
+  if(direction==='front' || direction==='back'){
+    const selected = state.elements.filter(e=>idSet.has(e.id));
+    const rest = state.elements.filter(e=>!idSet.has(e.id));
+    state.elements = direction==='front' ? [...rest, ...selected] : [...selected, ...rest];
+  } else {
+    const arr = state.elements;
+    if(direction==='forward'){
+      for(let i=arr.length-2; i>=0; i--){
+        if(idSet.has(arr[i].id) && !idSet.has(arr[i+1].id)){
+          const tmp=arr[i]; arr[i]=arr[i+1]; arr[i+1]=tmp;
+        }
+      }
+    } else {
+      for(let i=1; i<arr.length; i++){
+        if(idSet.has(arr[i].id) && !idSet.has(arr[i-1].id)){
+          const tmp=arr[i]; arr[i]=arr[i-1]; arr[i-1]=tmp;
+        }
+      }
+    }
+  }
+  render(); scheduleSave();
+}
+
+/* ---------------- grouping ---------------- */
+function groupSelection(){
+  const ids = state.multiSelect;
+  if(!ids || ids.length<2) return;
+  pushHistory();
+  const els = ids.map(getElement).filter(Boolean);
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  els.forEach(el=>{
+    const b = elementBBox(el);
+    minX=Math.min(minX,b.x); minY=Math.min(minY,b.y);
+    maxX=Math.max(maxX,b.x+b.w); maxY=Math.max(maxY,b.y+b.h);
+  });
+  const gx = minX-10, gy = minY-10, gw = (maxX-minX)+20, gh = (maxY-minY)+20;
+  const children = els.map(el=>{
+    const clone = JSON.parse(JSON.stringify(el));
+    if(clone.type==='wire') clone.points = clone.points.map(p=>({x:p.x-gx, y:p.y-gy}));
+    else { clone.x -= gx; clone.y -= gy; }
+    return clone;
+  });
+  state.counts.group = (state.counts.group||0)+1;
+  const groupEl = {id:uid(), type:'group', x:gx, y:gy, w:gw, h:gh, label:'그룹 '+state.counts.group, children};
+  state.elements = state.elements.filter(e=>!ids.includes(e.id));
+  state.elements.push(groupEl);
+  state.multiSelect = [];
+  state.selectedId = groupEl.id;
+  render(); scheduleSave();
+  openLabelEditor(groupEl.id, true);
+}
+function ungroupElement(groupEl){
+  pushHistory();
+  const restored = groupEl.children.map(child=>{
+    const clone = JSON.parse(JSON.stringify(child));
+    if(clone.type==='wire') clone.points = clone.points.map(p=>({x:p.x+groupEl.x, y:p.y+groupEl.y}));
+    else { clone.x += groupEl.x; clone.y += groupEl.y; }
+    clone.id = uid();
+    return clone;
+  });
+  state.elements = state.elements.filter(e=>e.id!==groupEl.id);
+  restored.forEach(r=>state.elements.push(r));
+  state.selectedId = null;
+  state.multiSelect = restored.map(r=>r.id);
+  render(); scheduleSave();
+}
+
+/* ---------------- component library ---------------- */
+function saveGroupToLibrary(groupEl){
+  const name = (groupEl.label||'구성요소').trim() || '구성요소';
+  const existingIdx = state.library.findIndex(t=>t.name===name);
+  const template = {
+    id: existingIdx>=0 ? state.library[existingIdx].id : ('lib_'+Date.now().toString(36)),
+    name, w:groupEl.w, h:groupEl.h,
+    children: JSON.parse(JSON.stringify(groupEl.children)),
+  };
+  if(existingIdx>=0){
+    if(!confirm('"'+name+'" 라이브러리 항목이 이미 있습니다. 덮어쓸까요?')) return;
+    state.library[existingIdx] = template;
+  } else {
+    state.library.push(template);
+  }
+  saveLibrary();
+  renderLibraryPanel();
+  toast('"'+name+'" 라이브러리에 저장했습니다.');
+}
+function deleteLibraryEntry(id){
+  if(!confirm('이 라이브러리 항목을 삭제할까요?')) return;
+  state.library = state.library.filter(t=>t.id!==id);
+  saveLibrary();
+  renderLibraryPanel();
+}
+function insertFromLibrary(template){
+  pushHistory();
+  const rect = canvasEl.getBoundingClientRect();
+  const center = screenToWorld(rect.left+rect.width/2, rect.top+rect.height/2);
+  const gx = center.x - template.w/2, gy = center.y - template.h/2;
+  state.counts.group = (state.counts.group||0)+1;
+  const groupEl = {id:uid(), type:'group', x:gx, y:gy, w:template.w, h:template.h, label:template.name, children:JSON.parse(JSON.stringify(template.children))};
+  state.elements.push(groupEl);
+  state.selectedId = groupEl.id;
+  state.multiSelect = [];
+  render(); scheduleSave();
+  toast('"'+template.name+'"을(를) 불러왔습니다.');
+}
+function buildLibraryThumb(t){
+  const pad = 8;
+  const svg = svgEl('svg',{viewBox:(-pad)+' '+(-pad)+' '+(t.w+pad*2)+' '+(t.h+pad*2), preserveAspectRatio:'xMidYMid meet'});
+  t.children.forEach(c=>svg.appendChild(buildElementNode(c)));
+  return svg;
+}
+function renderLibraryPanel(){
+  const list = document.getElementById('libList');
+  const btn = document.getElementById('btnLibrary');
+  if(btn) btn.textContent = '📦 라이브러리 (' + state.library.length + ')';
+  if(!list) return;
+  list.innerHTML = '';
+  if(!state.library.length){
+    list.innerHTML = '<p class="lib-empty">아직 저장된 구성요소가 없어요.<br><br>여러 요소를 드래그로 마퀴 선택 → <b style="color:var(--text)">그룹으로 묶기</b> → <b style="color:var(--text)">라이브러리에 저장</b> 순서로 만들 수 있어요.</p>';
+    return;
+  }
+  state.library.forEach(t=>{
+    const item = document.createElement('div');
+    item.className = 'lib-item';
+    const thumb = document.createElement('div');
+    thumb.className = 'lib-item-thumb';
+    thumb.appendChild(buildLibraryThumb(t));
+    const name = document.createElement('div');
+    name.className = 'lib-item-name';
+    name.textContent = t.name;
+    const actions = document.createElement('div');
+    actions.className = 'lib-item-actions';
+    const insertBtn = document.createElement('button');
+    insertBtn.textContent = '가져오기';
+    insertBtn.addEventListener('click', ()=>insertFromLibrary(t));
+    const delBtn = document.createElement('button');
+    delBtn.className = 'del';
+    delBtn.textContent = '삭제';
+    delBtn.addEventListener('click', ()=>deleteLibraryEntry(t.id));
+    actions.appendChild(insertBtn); actions.appendChild(delBtn);
+    item.appendChild(thumb); item.appendChild(name); item.appendChild(actions);
+    list.appendChild(item);
+  });
+}
+
+/* ---------------- keyboard ---------------- */
+window.addEventListener('keydown', e=>{
+  if(e.code==='Space'){
+    if(!isTypingTarget(e.target)){ spacePressed=true; e.preventDefault(); canvasEl.style.cursor='grab'; }
+    return;
+  }
+  if(isTypingTarget(e.target)) return;
+
+  const key = e.key, lower = key.toLowerCase();
+  if((e.ctrlKey||e.metaKey) && lower==='z' && e.shiftKey){ e.preventDefault(); redo(); return; }
+  if((e.ctrlKey||e.metaKey) && lower==='z'){ e.preventDefault(); undo(); return; }
+  if((e.ctrlKey||e.metaKey) && lower==='y'){ e.preventDefault(); redo(); return; }
+  if((e.ctrlKey||e.metaKey) && lower==='d'){ e.preventDefault(); duplicateSelected(); return; }
+  if((e.ctrlKey||e.metaKey) && lower==='c'){ e.preventDefault(); copySelection(); return; }
+  if((e.ctrlKey||e.metaKey) && lower==='v'){ e.preventDefault(); pasteClipboard(); return; }
+  if((e.ctrlKey||e.metaKey) && lower==='g'){ e.preventDefault(); groupSelection(); return; }
+  if((e.ctrlKey||e.metaKey) && key===']'){ e.preventDefault(); reorderSelection(e.shiftKey ? 'front' : 'forward'); return; }
+  if((e.ctrlKey||e.metaKey) && key==='['){ e.preventDefault(); reorderSelection(e.shiftKey ? 'back' : 'backward'); return; }
+  if((e.ctrlKey||e.metaKey) && lower==='s'){ e.preventDefault(); scheduleSave(); toast('저장됨'); return; }
+  if(key==='Delete' || key==='Backspace'){ e.preventDefault(); deleteSelected(); return; }
+  if(key==='Escape'){
+    if(state.drawingWire){ state.drawingWire=null; state.wireRubber=null; render(); return; }
+    if(state.editingId){ cancelLabelEditor(); return; }
+    if(state.multiSelect.length){ state.multiSelect=[]; render(); return; }
+    if(state.selectedId){ state.selectedId=null; render(); return; }
+    if(state.tool!=='select'){ setTool('select'); return; }
+    return;
+  }
+  if(key==='Enter'){ if(state.tool==='wire' && state.drawingWire) finalizeWire(); return; }
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){ e.preventDefault(); nudgeSelected(key, e.shiftKey); return; }
+  if(/^[1-6]$/.test(key)){ setColorByIndex(Number(key)-1); return; }
+  if(lower==='g' && !(e.ctrlKey||e.metaKey)){ toggleSnap(); return; }
+  if(lower==='v'){ setTool('select'); return; }
+  if(lower==='p'){ setTool('pcb'); return; }
+  if(lower==='b'){ setTool('box'); return; }
+  if(lower==='w'){ setTool('wire'); return; }
+  if(lower==='t'){ setTool('text'); return; }
+  if(lower==='o'){ setTool('port'); return; }
+  if(lower==='l'){ setTool('legend'); return; }
+  if(key==='?'){ toggleShortcuts(); return; }
+  if(key==='0'){ fitToContent(); return; }
+  if(key==='+' || key==='='){ zoomBy(1.2); return; }
+  if(key==='-'){ zoomBy(1/1.2); return; }
+});
+window.addEventListener('keyup', e=>{
+  if(e.code==='Space'){ spacePressed=false; canvasEl.style.cursor=''; }
+});
+
+/* ---------------- property panel ---------------- */
+function orderButtonsHtml(){
+  return '<div class="field"><label>순서 (겹칠 때 위/아래)</label><div style="display:flex;gap:6px;">'+
+    '<button class="btn" id="ordFront" title="맨 앞으로 (Ctrl+Shift+])" style="text-align:center;padding:7px 4px;">⏫</button>'+
+    '<button class="btn" id="ordFwd" title="한 단계 앞으로 (Ctrl+])" style="text-align:center;padding:7px 4px;">🔼</button>'+
+    '<button class="btn" id="ordBack" title="한 단계 뒤로 (Ctrl+[)" style="text-align:center;padding:7px 4px;">🔽</button>'+
+    '<button class="btn" id="ordToBack" title="맨 뒤로 (Ctrl+Shift+[)" style="text-align:center;padding:7px 4px;">⏬</button>'+
+    '</div></div>';
+}
+function bindOrderButtons(){
+  const map = {ordFront:'front', ordFwd:'forward', ordBack:'backward', ordToBack:'back'};
+  Object.keys(map).forEach(id=>{
+    const b = document.getElementById(id);
+    if(b) b.addEventListener('click', ()=>reorderSelection(map[id]));
+  });
+}
+function updatePropertyPanel(){
+  if(state.multiSelect.length>1){
+    const n = state.multiSelect.length;
+    panelEl.innerHTML =
+      '<h3>다중 선택</h3><p class="sub">'+n+'개 요소가 선택되었습니다</p>'+
+      orderButtonsHtml()+
+      '<div class="btn-row">'+
+      '<button class="btn" id="groupBtn">▣ 그룹으로 묶기 (Ctrl+G)</button>'+
+      '<button class="btn" id="dupBtn">⧉ 복제 (Ctrl+D)</button>'+
+      '<button class="btn danger" id="delBtn">🗑 모두 삭제 (Delete)</button>'+
+      '</div>'+
+      '<div class="hint">그룹으로 묶으면 이름을 붙여 하나의 블럭처럼 이동·복제할 수 있고, <b>라이브러리에 저장</b>해서 다음에 이름으로 바로 불러올 수 있어요.</div>';
+    bindOrderButtons();
+    document.getElementById('groupBtn').addEventListener('click', groupSelection);
+    document.getElementById('dupBtn').addEventListener('click', duplicateSelected);
+    document.getElementById('delBtn').addEventListener('click', deleteSelected);
+    return;
+  }
+  const el = getElement(state.selectedId);
+  if(!el){
+    panelEl.innerHTML =
+      '<h3>속성</h3>'+
+      '<p class="empty-panel">요소를 선택하면 이름과 색상을 편집할 수 있어요. 캔버스를 드래그하면 여러 개를 한번에 선택(마퀴 선택)할 수 있어요.<br><br>'+
+      '다음에 그릴 <b style="color:var(--text)">배선 색</b>과 <b style="color:var(--text)">박스 색</b>을 미리 고를 수 있습니다.</p>'+
+      '<div class="field"><label>다음 배선 색상</label><div class="swrow" id="nextWireColors"></div></div>'+
+      '<div class="field"><label>다음 박스 색상</label><div class="swrow" id="nextBoxThemes"></div></div>'+
+      '<div class="hint"><b>Tip.</b> P/B로 PCB·부품 박스를 드래그해서 만들고, W로 배선을 그린 뒤 클릭으로 꺾어보세요. 여러 요소를 묶어 <b>📦 라이브러리</b>에 저장하면 다음에 이름으로 바로 불러올 수 있어요.</div>';
+    buildSwatchRow(document.getElementById('nextWireColors'), WIRE_COLORS.map(c=>c.value), state.currentColor, v=>{ state.currentColor=v; render(); });
+    buildSwatchRow(document.getElementById('nextBoxThemes'), BOX_THEMES.map(t=>t.fill), BOX_THEMES[state.currentTheme].fill, v=>{ state.currentTheme = BOX_THEMES.findIndex(t=>t.fill===v); render(); }, BOX_THEMES.map(t=>t.border));
+    return;
+  }
+
+  let html = '';
+  if(el.type==='pcb'){
+    html += '<h3>PCB</h3><p class="sub">초록 기판 · 자유 크기 조절</p>';
+    html += field('이름', 'text', 'labelInput', el.label);
+    html += '<div class="field"><label>글자 크기</label><div class="rangewrap"><input type="range" id="labelSizeRange" min="9" max="28" value="'+(el.labelSize||13)+'"><span>'+(el.labelSize||13)+'</span></div></div>';
+    html += '<div class="field"><label>크기 / 위치</label><div class="grid2">'+
+      num('numX', 'X', el.x) + num('numY', 'Y', el.y) + num('numW','너비', el.w) + num('numH','높이', el.h) + '</div></div>';
+  } else if(el.type==='box'){
+    html += '<h3>부품 박스</h3><p class="sub">버튼 · 릴레이 · SMPS 등 범용 박스</p>';
+    html += field('이름', 'text', 'labelInput', el.label);
+    html += '<div class="field"><label>글자 크기</label><div class="rangewrap"><input type="range" id="labelSizeRange" min="9" max="28" value="'+(el.labelSize||12.5)+'"><span>'+(el.labelSize||12.5)+'</span></div></div>';
+    html += '<div class="field"><label>색상</label><div class="swrow" id="themeRow"></div></div>';
+    html += '<div class="field"><label>크기 / 위치</label><div class="grid2">'+
+      num('numX','X', el.x) + num('numY','Y', el.y) + num('numW','너비', el.w) + num('numH','높이', el.h) + '</div></div>';
+  } else if(el.type==='text'){
+    html += '<h3>텍스트 라벨</h3><p class="sub">더블클릭으로도 편집할 수 있어요</p>';
+    html += field('내용', 'text', 'labelInput', el.text);
+    html += '<div class="field"><label>글자 크기</label><div class="rangewrap"><input type="range" id="sizeRange" min="10" max="32" value="'+el.size+'"><span>'+el.size+'</span></div></div>';
+  } else if(el.type==='wire'){
+    html += '<h3>배선</h3><p class="sub">꺾인점 '+el.points.length+'개 · 드래그로 이동, 더블클릭으로 점 추가/삭제</p>';
+    html += '<div class="field"><label>색상</label><div class="swrow" id="wireColorRow"></div></div>';
+    html += '<div class="field"><label>굵기</label><div class="rangewrap"><input type="range" id="widthRange" min="2" max="8" value="'+el.width+'"><span>'+el.width+'</span></div></div>';
+  } else if(el.type==='port'){
+    html += '<h3>포트 / 핀</h3><p class="sub">커넥터 핀·포트 위치와 이름을 표시합니다</p>';
+    html += field('이름', 'text', 'labelInput', el.label);
+    html += '<div class="field"><label>모양</label><div style="display:flex;gap:8px;">'+
+      '<button class="btn" id="shapeCircleBtn" style="text-align:center;'+(el.shape==='circle'?'border-color:var(--accent);color:var(--accent);':'')+'">● 원</button>'+
+      '<button class="btn" id="shapeSquareBtn" style="text-align:center;'+(el.shape==='square'?'border-color:var(--accent);color:var(--accent);':'')+'">■ 사각</button></div></div>';
+    html += '<div class="field"><label>색상</label><div class="swrow" id="portColorRow"></div></div>';
+    html += '<div class="field"><label>크기</label><div class="rangewrap"><input type="range" id="portSizeRange" min="4" max="16" value="'+(el.size||8)+'"><span>'+(el.size||8)+'</span></div></div>';
+  } else if(el.type==='legend'){
+    html += '<h3>배선 범례</h3><p class="sub">색상별 배선의 의미를 적어두세요 (예: 빨강 = LAN선)</p>';
+    html += field('제목', 'text', 'legendTitleInput', el.title||'배선 범례');
+    html += '<div class="field"><label>항목</label><div id="legendRows"></div>'+
+      '<button class="btn" id="legendAddRow" style="margin-top:2px;">＋ 항목 추가</button></div>';
+  } else if(el.type==='group'){
+    html += '<h3>그룹</h3><p class="sub">'+el.children.length+'개 요소 묶음</p>';
+    html += field('이름', 'text', 'labelInput', el.label);
+    html += '<div class="btn-row" style="margin-top:2px;">'+
+      '<button class="btn" id="saveLibBtn">📦 라이브러리에 저장</button>'+
+      '<button class="btn" id="ungroupBtn">⛶ 그룹 해제</button>'+
+      '</div>';
+  }
+  html += orderButtonsHtml();
+  html += '<div class="btn-row"><button class="btn" id="dupBtn">⧉ 복제 (Ctrl+D)</button><button class="btn danger" id="delBtn">🗑 삭제 (Delete)</button></div>';
+  panelEl.innerHTML = html;
+
+  const labelInput = document.getElementById('labelInput');
+  if(labelInput){
+    labelInput.addEventListener('change', ()=>{
+      pushHistory();
+      const v = labelInput.value.trim() || (el.type==='text' ? '텍스트' : '이름 없음');
+      if(el.type==='text') el.text=v; else el.label=v;
+      render(); scheduleSave();
+    });
+  }
+  bindNum('numX', v=>{ el.x=v; });
+  bindNum('numY', v=>{ el.y=v; });
+  bindNum('numW', v=>{ el.w=Math.max(20,v); });
+  bindNum('numH', v=>{ el.h=Math.max(20,v); });
+
+  const lsr = document.getElementById('labelSizeRange');
+  if(lsr){
+    lsr.addEventListener('input', ()=>{ el.labelSize = Number(lsr.value); lsr.nextElementSibling.textContent = lsr.value; render(); });
+    lsr.addEventListener('change', ()=>{ scheduleSave(); });
+  }
+
+  if(el.type==='box'){
+    buildSwatchRow(document.getElementById('themeRow'), BOX_THEMES.map(t=>t.fill), BOX_THEMES[el.themeIndex||0].fill, v=>{
+      pushHistory();
+      el.themeIndex = BOX_THEMES.findIndex(t=>t.fill===v);
+      render(); scheduleSave();
+    }, BOX_THEMES.map(t=>t.border));
+  }
+  if(el.type==='wire'){
+    buildSwatchRow(document.getElementById('wireColorRow'), WIRE_COLORS.map(c=>c.value), el.color, v=>{
+      pushHistory();
+      el.color = v; state.currentColor = v;
+      render(); scheduleSave();
+    });
+    const wr = document.getElementById('widthRange');
+    wr.addEventListener('input', ()=>{ el.width = Number(wr.value); wr.nextElementSibling.textContent = wr.value; render(); });
+    wr.addEventListener('change', ()=>{ scheduleSave(); });
+  }
+  if(el.type==='text'){
+    const sr = document.getElementById('sizeRange');
+    sr.addEventListener('input', ()=>{ el.size = Number(sr.value); sr.nextElementSibling.textContent = sr.value; render(); });
+    sr.addEventListener('change', ()=>{ scheduleSave(); });
+  }
+  if(el.type==='port'){
+    document.getElementById('shapeCircleBtn').addEventListener('click', ()=>{
+      pushHistory(); el.shape='circle'; state.currentPortShape='circle'; render(); scheduleSave();
+    });
+    document.getElementById('shapeSquareBtn').addEventListener('click', ()=>{
+      pushHistory(); el.shape='square'; state.currentPortShape='square'; render(); scheduleSave();
+    });
+    buildSwatchRow(document.getElementById('portColorRow'), WIRE_COLORS.map(c=>c.value), el.color, v=>{
+      pushHistory(); el.color=v; state.currentColor=v; render(); scheduleSave();
+    });
+    const psr = document.getElementById('portSizeRange');
+    psr.addEventListener('input', ()=>{ el.size = Number(psr.value); psr.nextElementSibling.textContent = psr.value; render(); });
+    psr.addEventListener('change', ()=>{ scheduleSave(); });
+  }
+  if(el.type==='legend'){
+    const titleInput = document.getElementById('legendTitleInput');
+    titleInput.addEventListener('change', ()=>{
+      pushHistory(); el.title = titleInput.value.trim() || '배선 범례'; render(); scheduleSave();
+    });
+    renderLegendRows(el);
+    document.getElementById('legendAddRow').addEventListener('click', ()=>{
+      pushHistory();
+      el.rows.push({color: WIRE_COLORS[el.rows.length % WIRE_COLORS.length].value, text:''});
+      render(); scheduleSave();
+    });
+  }
+  if(el.type==='group'){
+    document.getElementById('saveLibBtn').addEventListener('click', ()=>saveGroupToLibrary(el));
+    document.getElementById('ungroupBtn').addEventListener('click', ()=>ungroupElement(el));
+  }
+
+  document.getElementById('dupBtn').addEventListener('click', duplicateSelected);
+  document.getElementById('delBtn').addEventListener('click', deleteSelected);
+  bindOrderButtons();
+
+  function bindNum(id, apply){
+    const input = document.getElementById(id);
+    if(!input) return;
+    input.addEventListener('change', ()=>{
+      pushHistory();
+      apply(Number(input.value));
+      render(); scheduleSave();
+    });
+  }
+}
+function field(label, type, id, value){
+  return '<div class="field"><label>'+label+'</label><input type="'+type+'" id="'+id+'" value="'+escapeAttr(value)+'"></div>';
+}
+function num(id, label, value){
+  return '<div><label style="font-size:10px;color:var(--text-secondary);display:block;margin-bottom:3px;">'+label+'</label><input type="number" id="'+id+'" value="'+Math.round(value)+'"></div>';
+}
+function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
+function buildSwatchRow(container, values, activeValue, onPick, borders){
+  if(!container) return;
+  container.innerHTML='';
+  values.forEach((v,i)=>{
+    const d = document.createElement('div');
+    d.className = 'sw' + (v===activeValue ? ' active' : '');
+    d.style.background = v;
+    if(borders) d.style.boxShadow = 'inset 0 0 0 2px '+borders[i];
+    d.title = v;
+    d.addEventListener('click', ()=>onPick(v));
+    container.appendChild(d);
+  });
+}
+
+function renderLegendRows(el){
+  const container = document.getElementById('legendRows');
+  if(!container) return;
+  container.innerHTML='';
+  el.rows.forEach((row,i)=>{
+    const rowEl = document.createElement('div');
+    rowEl.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:6px;';
+    const sw = document.createElement('div');
+    sw.style.cssText='width:22px;height:22px;border-radius:5px;flex:0 0 auto;cursor:pointer;background:'+row.color+';border:1px solid var(--panel-border);';
+    sw.title='클릭하여 색상 변경';
+    sw.addEventListener('click', ()=>{
+      const idx = WIRE_COLORS.findIndex(c=>c.value===row.color);
+      const next = WIRE_COLORS[(idx+1)%WIRE_COLORS.length].value;
+      pushHistory(); row.color = next; render(); scheduleSave();
+    });
+    const inp = document.createElement('input');
+    inp.type='text'; inp.value=row.text; inp.placeholder='예: LAN선';
+    inp.style.cssText='flex:1;min-width:0;background:var(--panel-bg-2);border:1px solid var(--panel-border);color:var(--text);border-radius:6px;padding:5px 7px;font-size:12px;font-family:\'JetBrains Mono\',monospace;';
+    inp.addEventListener('change', ()=>{ pushHistory(); row.text=inp.value; render(); scheduleSave(); });
+    const rm = document.createElement('button');
+    rm.textContent='✕';
+    rm.title='항목 삭제';
+    rm.style.cssText='flex:0 0 auto;background:transparent;border:none;color:var(--text-secondary);cursor:pointer;font-size:13px;padding:4px;';
+    rm.addEventListener('click', ()=>{ pushHistory(); el.rows.splice(i,1); render(); scheduleSave(); });
+    rowEl.appendChild(sw); rowEl.appendChild(inp); rowEl.appendChild(rm);
+    container.appendChild(rowEl);
+  });
+}
+
+/* ---------------- toolbar / topbar wiring ---------------- */
+document.querySelectorAll('.tool[data-tool]').forEach(btn=>{
+  btn.addEventListener('click', ()=>setTool(btn.dataset.tool));
+});
+document.getElementById('portShapeCircleBtn').addEventListener('click', ()=>{ state.currentPortShape='circle'; render(); });
+document.getElementById('portShapeSquareBtn').addEventListener('click', ()=>{ state.currentPortShape='square'; render(); });
+
+document.getElementById('btnUndo').addEventListener('click', undo);
+document.getElementById('btnRedo').addEventListener('click', redo);
+document.getElementById('btnZoomIn').addEventListener('click', ()=>zoomBy(1.25));
+document.getElementById('btnZoomOut').addEventListener('click', ()=>zoomBy(1/1.25));
+document.getElementById('btnFit').addEventListener('click', fitToContent);
+zoomLabel.addEventListener('click', fitToContent);
+document.getElementById('btnGrid').addEventListener('click', toggleSnap);
+document.getElementById('btnHelp').addEventListener('click', toggleShortcuts);
+document.getElementById('closeShortcuts').addEventListener('click', toggleShortcuts);
+document.getElementById('shortcutsOverlay').addEventListener('click', e=>{ if(e.target.id==='shortcutsOverlay') toggleShortcuts(); });
+document.getElementById('btnClear').addEventListener('click', ()=>{
+  if(!state.elements.length) return;
+  if(confirm('모든 요소를 지울까요? 이 동작은 실행 취소할 수 있습니다.')){
+    pushHistory();
+    state.elements = [];
+    state.selectedId = null;
+    render(); scheduleSave();
+  }
+});
+document.getElementById('btnTheme').addEventListener('click', ()=>{
+  const cur = document.documentElement.dataset.theme;
+  document.documentElement.dataset.theme = cur==='dark' ? 'light' : 'dark';
+});
+document.getElementById('btnLibrary').addEventListener('click', ()=>{
+  document.getElementById('libraryDrawer').classList.toggle('open');
+});
+document.getElementById('libClose').addEventListener('click', ()=>{
+  document.getElementById('libraryDrawer').classList.remove('open');
+});
+
+function toggleShortcuts(){
+  document.getElementById('shortcutsOverlay').classList.toggle('hidden');
+}
+
+/* ---------------- import / export ---------------- */
+async function getDownloads(){
+  if(downloadsCap===undefined){
+    try{ downloadsCap = (window.claude && window.claude.use) ? await window.claude.use('downloads') : null; }
+    catch(e){ downloadsCap = null; }
+  }
+  return downloadsCap;
+}
+function handleDownloadError(err){
+  if(err && err.code==='declined') return false;
+  console.error(err);
+  toast('내보내기에 실패했습니다.');
+  return false;
+}
+async function downloadFile(filename, data, mime){
+  const downloads = await getDownloads();
+  if(downloads){
+    try{
+      await downloads.save({filename, data});
+      return true;
+    }catch(err){
+      return handleDownloadError(err);
+    }
+  }
+  try{
+    const blob = (data instanceof Blob) ? data : new Blob([data], {type: mime || 'application/octet-stream'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 2000);
+    return true;
+  }catch(err){
+    console.error(err);
+    toast('파일 저장에 실패했습니다.');
+    return false;
+  }
+}
+function buildExportSvgString(bbox){
+  const svg = svgEl('svg',{xmlns:SVGNS, viewBox:bbox.x+' '+bbox.y+' '+bbox.w+' '+bbox.h, width:bbox.w, height:bbox.h});
+  svg.appendChild(svgEl('rect',{x:bbox.x,y:bbox.y,width:bbox.w,height:bbox.h,fill:'#ffffff'}));
+  state.elements.forEach(el=>svg.appendChild(buildElementNode(el)));
+  return new XMLSerializer().serializeToString(svg);
+}
+document.getElementById('btnExportSvg').addEventListener('click', async ()=>{
+  const bbox = computeContentBBox(40);
+  const str = buildExportSvgString(bbox);
+  const ok = await downloadFile('결선도.svg', str, 'image/svg+xml');
+  if(ok) toast('SVG 파일을 저장했습니다.');
+});
+document.getElementById('btnExportJson').addEventListener('click', async ()=>{
+  const str = JSON.stringify({version:1, elements:state.elements, counts:state.counts}, null, 2);
+  const ok = await downloadFile('결선도.json', str, 'application/json');
+  if(ok) toast('JSON 파일을 저장했습니다.');
+});
+document.getElementById('btnExportPng').addEventListener('click', async ()=>{
+  const bbox = computeContentBBox(40);
+  const scale = 2;
+  const str = buildExportSvgString(bbox);
+  const blob = new Blob([str], {type:'image/svg+xml;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = ()=>{
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bbox.w*scale));
+    canvas.height = Math.max(1, Math.round(bbox.h*scale));
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    URL.revokeObjectURL(url);
+    canvas.toBlob(async pngBlob=>{
+      const ok = await downloadFile('결선도.png', pngBlob, 'image/png');
+      if(ok) toast('PNG 파일을 저장했습니다.');
+    }, 'image/png');
+  };
+  img.onerror = ()=>{ URL.revokeObjectURL(url); toast('PNG 변환에 실패했습니다.'); };
+  img.src = url;
+});
+document.getElementById('btnImport').addEventListener('click', ()=>document.getElementById('importInput').click());
+document.getElementById('importInput').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const data = JSON.parse(reader.result);
+      if(!data || !Array.isArray(data.elements)) throw new Error('invalid');
+      if(state.elements.length && !confirm('현재 결선도를 불러온 파일로 교체할까요?')){ e.target.value=''; return; }
+      pushHistory();
+      state.elements = data.elements;
+      state.counts = data.counts || state.counts;
+      let maxN=0;
+      state.elements.forEach(el=>{ const m=/el(\d+)/.exec(el.id); if(m) maxN=Math.max(maxN,Number(m[1])); });
+      idCounter = maxN+1;
+      state.selectedId = null;
+      render(); scheduleSave();
+      toast('불러오기 완료');
+    }catch(err){ toast('JSON 파일을 읽을 수 없습니다.'); }
+    e.target.value='';
+  };
+  reader.readAsText(file);
+});
+
+/* ---------------- init ---------------- */
+loadInitial();
+loadLibrary();
+setTool('select');
+render();
+renderLibraryPanel();
+requestAnimationFrame(fitToContent);
+})();
+</script>
+</body>
+</html>
