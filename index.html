@@ -93,6 +93,12 @@
   .tbtn:hover{ background:var(--panel-bg-2); color:var(--text); }
   .tbtn:disabled{ opacity:.35; cursor:not-allowed; }
   .tbtn:disabled:hover{ background:transparent; color:var(--text-secondary); }
+  .tbtn.active{ background:var(--accent-soft); color:var(--accent); border-color:var(--accent); }
+  select.tbtn{
+    border:1px solid var(--panel-border); background:var(--panel-bg-2); color:var(--text);
+    -webkit-appearance:none; appearance:none;
+  }
+  select.tbtn:hover{ border-color:var(--accent); }
   .zoomlabel{ min-width:44px; text-align:center; }
   .spacer{ flex:1; }
   .file-input{ display:none; }
@@ -262,6 +268,13 @@
       <button class="tbtn" id="btnZoomIn" title="확대 (+)">＋</button>
       <button class="tbtn" id="btnFit" title="전체 보기 (0)">전체보기</button>
       <button class="tbtn" id="btnGrid" title="격자 스냅 토글 (G)">▦ 스냅</button>
+      <select id="gridSizeSelect" class="tbtn mono" title="격자 간격" style="cursor:pointer;">
+        <option value="5">5px</option>
+        <option value="10">10px</option>
+        <option value="20">20px</option>
+        <option value="40">40px</option>
+      </select>
+      <button class="tbtn" id="btnDim" title="PCB/박스 치수선 표시/숨김">📏 치수</button>
     </div>
     <div class="spacer"></div>
     <div class="topbar-group" id="exportGroup">
@@ -330,13 +343,17 @@
       </div>
       <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <pattern id="dotgrid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <pattern id="dotgrid" width="10" height="10" patternUnits="userSpaceOnUse">
             <circle cx="1" cy="1" r="1" fill="var(--canvas-grid)"></circle>
           </pattern>
+          <marker id="dimArrow" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#374151"></path>
+          </marker>
         </defs>
         <g id="world">
           <rect id="gridRect" x="-4000" y="-4000" width="8000" height="8000" fill="url(#dotgrid)"></rect>
           <g id="elementsLayer"></g>
+          <g id="dimensionsLayer"></g>
           <g id="overlayLayer"></g>
         </g>
       </svg>
@@ -386,6 +403,7 @@
         <tr><td>방향키</td><td>선택 요소 이동 (<kbd>Shift</kbd>+방향키 = 격자 단위)</td></tr>
         <tr><td><kbd>1</kbd>~<kbd>6</kbd></td><td>배선 색상 선택 (배선 그리는 중이거나 선택 중일 때)</td></tr>
         <tr><td><kbd>G</kbd></td><td>격자 스냅 켜기/끄기</td></tr>
+        <tr><td>📏 치수 버튼</td><td>PCB/박스에 mm 치수선(CAD 스타일) 표시/숨김 — 내보내기에도 반영됩니다</td></tr>
         <tr><td>더블클릭 (도형)</td><td>이름(라벨) 편집</td></tr>
         <tr><td>더블클릭 (배선 위)</td><td>꺾인점 추가 · 더블클릭(점 위) = 꺾인점 삭제</td></tr>
         <tr><td>스페이스+드래그 / 휠 클릭 드래그</td><td>화면 이동(패닝)</td></tr>
@@ -424,6 +442,9 @@ const BOX_THEMES = [
 ];
 const PCB_FILL = '#16a34a';
 const PCB_STROKE = '#14532d';
+const PX_PER_MM = 2;
+const DIM_OFFSET = 20;
+const DIM_EXT_OVERSHOOT = 4;
 const STORAGE_KEY = 'wiring-editor-v1';
 const LIBRARY_KEY = 'wiring-editor-library-v1';
 const HANDLE_NAMES = ['nw','n','ne','w','e','sw','s','se'];
@@ -445,8 +466,9 @@ const state = {
   currentPortShape: 'circle',
   zoom: 1,
   pan: {x:60, y:60},
-  grid: 20,
+  grid: 10,
   snap: true,
+  showDimensions: true,
   drawingWire: null,
   wireRubber: null,
   drawPreview: null,
@@ -464,6 +486,7 @@ const canvasEl = document.getElementById('canvas');
 const canvasWrap = document.getElementById('canvasWrap');
 const world = document.getElementById('world');
 const elementsLayer = document.getElementById('elementsLayer');
+const dimensionsLayer = document.getElementById('dimensionsLayer');
 const overlayLayer = document.getElementById('overlayLayer');
 const panelEl = document.getElementById('panel');
 const zoomLabel = document.getElementById('zoomLabel');
@@ -514,6 +537,10 @@ function elementBBox(el){
   if(el.type==='legend'){
     const m = legendMetrics(el);
     return {x:el.x, y:el.y, w:m.width, h:m.height};
+  }
+  if((el.type==='pcb' || el.type==='box') && state.showDimensions && el.dimW && el.dimH){
+    const pad = DIM_OFFSET + 14;
+    return {x:el.x-pad, y:el.y-pad, w:el.w+pad, h:el.h+pad};
   }
   return {x:el.x, y:el.y, w:el.w, h:el.h};
 }
@@ -597,8 +624,8 @@ function loadInitial(){
   seedExample();
 }
 function seedExample(){
-  const pcb = {id:uid(), type:'pcb', x:420, y:120, w:200, h:130, label:'PCB 1'};
-  const box = {id:uid(), type:'box', x:120, y:140, w:150, h:80, label:'전원 SMPS', themeIndex:2};
+  const pcb = {id:uid(), type:'pcb', x:420, y:120, w:200, h:130, label:'PCB 1', labelSize:13, dimW:100, dimH:65};
+  const box = {id:uid(), type:'box', x:120, y:140, w:150, h:80, label:'전원 SMPS', themeIndex:2, labelSize:12.5, dimW:75, dimH:40};
   const wire = {id:uid(), type:'wire', points:[{x:270,y:180},{x:340,y:180},{x:340,y:180},{x:420,y:180}], color:'#dc2626', width:3};
   const txt = {id:uid(), type:'text', x:120, y:260, text:'예시 요소입니다 — 전체지우기로 새로 시작하세요', size:13};
   state.elements = [pcb, box, wire, txt];
@@ -608,11 +635,13 @@ function seedExample(){
 /* ---------------- element factories ---------------- */
 function createPcb(x,y,w,h){
   state.counts.pcb++;
-  return {id:uid(), type:'pcb', x,y,w,h, label:'PCB '+state.counts.pcb, labelSize:13};
+  return {id:uid(), type:'pcb', x,y,w,h, label:'PCB '+state.counts.pcb, labelSize:13,
+    dimW: Math.round(w/PX_PER_MM), dimH: Math.round(h/PX_PER_MM)};
 }
 function createBox(x,y,w,h){
   state.counts.box++;
-  return {id:uid(), type:'box', x,y,w,h, label:'구성요소 '+state.counts.box, themeIndex: state.currentTheme, labelSize:12.5};
+  return {id:uid(), type:'box', x,y,w,h, label:'구성요소 '+state.counts.box, themeIndex: state.currentTheme, labelSize:12.5,
+    dimW: Math.round(w/PX_PER_MM), dimH: Math.round(h/PX_PER_MM)};
 }
 function createText(x,y){
   state.counts.text++;
@@ -633,11 +662,20 @@ function setTool(name){
 /* ================= RENDER ================= */
 function render(){
   elementsLayer.innerHTML = '';
+  dimensionsLayer.innerHTML = '';
   overlayLayer.innerHTML = '';
 
   state.elements.forEach(el=>{
     elementsLayer.appendChild(buildElementNode(el));
   });
+
+  if(state.showDimensions){
+    state.elements.forEach(el=>{
+      if((el.type==='pcb' || el.type==='box') && el.dimW && el.dimH){
+        dimensionsLayer.appendChild(buildDimensionOverlay(el));
+      }
+    });
+  }
 
   if(state.drawPreview) overlayLayer.appendChild(buildPreviewRect(state.drawPreview));
   if(state.drawingWire) overlayLayer.appendChild(buildWireDraft(state.drawingWire, state.wireRubber));
@@ -661,6 +699,7 @@ function render(){
   buildSwatchRow(colorPicker, WIRE_COLORS.map(c=>c.value), state.currentColor, v=>{ state.currentColor=v; render(); });
   document.getElementById('portShapeCircleBtn').classList.toggle('active', state.currentPortShape==='circle');
   document.getElementById('portShapeSquareBtn').classList.toggle('active', state.currentPortShape==='square');
+  document.getElementById('btnDim').classList.toggle('active', state.showDimensions);
   updatePropertyPanel();
 }
 
@@ -697,7 +736,7 @@ function buildPortNode(el){
     g.appendChild(svgEl('circle',{cx:el.x,cy:el.y,r:s,fill:el.color,stroke:'#20242b','stroke-width':1.6}));
   }
   const t = svgEl('text',{x:el.x+s+7,y:el.y,'dominant-baseline':'middle',
-    fill:'#20242b','font-family':"'JetBrains Mono',monospace",'font-size':12,'font-weight':600});
+    fill:'#20242b','font-family':"'JetBrains Mono',monospace",'font-size':12,'font-weight':700});
   t.textContent = el.label;
   g.appendChild(t);
   return g;
@@ -720,7 +759,7 @@ function buildLegendNode(el){
     const ry = el.y+m.padTop+i*m.rowH+4;
     g.appendChild(svgEl('line',{x1:el.x+m.padX,y1:ry+4,x2:el.x+m.padX+22,y2:ry+4,stroke:row.color,'stroke-width':4,'stroke-linecap':'round'}));
     const t = svgEl('text',{x:el.x+m.padX+30,y:ry+8,fill: row.text ? '#20242b' : '#9aa0ab',
-      'font-family':"'JetBrains Mono',monospace",'font-size':11.5});
+      'font-family':"'JetBrains Mono',monospace",'font-size':11.5,'font-weight':700});
     t.textContent = row.text ? row.text : '설명 없음';
     g.appendChild(t);
   });
@@ -736,10 +775,19 @@ function buildPcbNode(el){
       g.appendChild(svgEl('circle',{cx:p[0],cy:p[1],r:3.4,fill:'#e8f6ec',stroke:PCB_STROKE,'stroke-width':1.2}));
     });
   }
-  const t = svgEl('text',{x:el.x+el.w/2,y:el.y+el.h/2,'text-anchor':'middle','dominant-baseline':'middle',
-    fill:'#f4fbf6','font-family':"'JetBrains Mono',monospace",'font-size':el.labelSize||13,'font-weight':600});
+  const fs = el.labelSize||13;
+  const showDim = el.dimW && el.dimH && el.h > 40;
+  const labelY = showDim ? el.y+el.h/2-fs*0.55 : el.y+el.h/2;
+  const t = svgEl('text',{x:el.x+el.w/2,y:labelY,'text-anchor':'middle','dominant-baseline':'middle',
+    fill:'#f4fbf6','font-family':"'JetBrains Mono',monospace",'font-size':fs,'font-weight':700});
   t.textContent = el.label;
   g.appendChild(t);
+  if(showDim){
+    const dt = svgEl('text',{x:el.x+el.w/2,y:labelY+fs*0.85,'text-anchor':'middle','dominant-baseline':'middle',
+      fill:'#dff5e6','font-family':"'JetBrains Mono',monospace",'font-size':Math.max(9, fs*0.62),'font-weight':700,opacity:0.9});
+    dt.textContent = el.dimW+' × '+el.dimH+' mm';
+    g.appendChild(dt);
+  }
   return g;
 }
 
@@ -747,16 +795,48 @@ function buildBoxNode(el){
   const theme = BOX_THEMES[el.themeIndex||0];
   const g = svgEl('g',{'data-role':'element','data-id':el.id});
   g.appendChild(svgEl('rect',{x:el.x,y:el.y,width:el.w,height:el.h,rx:7,fill:theme.fill,stroke:theme.border,'stroke-width':2}));
-  const t = svgEl('text',{x:el.x+el.w/2,y:el.y+el.h/2,'text-anchor':'middle','dominant-baseline':'middle',
-    fill:theme.text,'font-family':"'JetBrains Mono',monospace",'font-size':el.labelSize||12.5,'font-weight':600});
+  const fs = el.labelSize||12.5;
+  const showDim = el.dimW && el.dimH && el.h > 40;
+  const labelY = showDim ? el.y+el.h/2-fs*0.55 : el.y+el.h/2;
+  const t = svgEl('text',{x:el.x+el.w/2,y:labelY,'text-anchor':'middle','dominant-baseline':'middle',
+    fill:theme.text,'font-family':"'JetBrains Mono',monospace",'font-size':fs,'font-weight':700});
   t.textContent = el.label;
   g.appendChild(t);
+  if(showDim){
+    const dt = svgEl('text',{x:el.x+el.w/2,y:labelY+fs*0.85,'text-anchor':'middle','dominant-baseline':'middle',
+      fill:theme.text,'font-family':"'JetBrains Mono',monospace",'font-size':Math.max(9, fs*0.62),'font-weight':700,opacity:0.85});
+    dt.textContent = el.dimW+' × '+el.dimH+' mm';
+    g.appendChild(dt);
+  }
+  return g;
+}
+
+function buildDimensionOverlay(el){
+  const g = svgEl('g',{'pointer-events':'none'});
+  const extTop = el.y - DIM_OFFSET - DIM_EXT_OVERSHOOT;
+  const dimY = el.y - DIM_OFFSET;
+  g.appendChild(svgEl('line',{x1:el.x,y1:el.y,x2:el.x,y2:extTop,stroke:'#6b7280','stroke-width':1}));
+  g.appendChild(svgEl('line',{x1:el.x+el.w,y1:el.y,x2:el.x+el.w,y2:extTop,stroke:'#6b7280','stroke-width':1}));
+  g.appendChild(svgEl('line',{x1:el.x,y1:dimY,x2:el.x+el.w,y2:dimY,stroke:'#374151','stroke-width':1,'marker-start':'url(#dimArrow)','marker-end':'url(#dimArrow)'}));
+  const wt = svgEl('text',{x:el.x+el.w/2,y:dimY-4,'text-anchor':'middle',fill:'#374151','font-family':"'JetBrains Mono',monospace",'font-size':11,'font-weight':700});
+  wt.textContent = el.dimW+' mm';
+  g.appendChild(wt);
+
+  const extLeft = el.x - DIM_OFFSET - DIM_EXT_OVERSHOOT;
+  const dimX = el.x - DIM_OFFSET;
+  g.appendChild(svgEl('line',{x1:el.x,y1:el.y,x2:extLeft,y2:el.y,stroke:'#6b7280','stroke-width':1}));
+  g.appendChild(svgEl('line',{x1:el.x,y1:el.y+el.h,x2:extLeft,y2:el.y+el.h,stroke:'#6b7280','stroke-width':1}));
+  g.appendChild(svgEl('line',{x1:dimX,y1:el.y,x2:dimX,y2:el.y+el.h,stroke:'#374151','stroke-width':1,'marker-start':'url(#dimArrow)','marker-end':'url(#dimArrow)'}));
+  const ht = svgEl('text',{x:dimX-4,y:el.y+el.h/2,'text-anchor':'middle',fill:'#374151','font-family':"'JetBrains Mono',monospace",'font-size':11,'font-weight':700,
+    transform:'rotate(-90 '+(dimX-4)+' '+(el.y+el.h/2)+')'});
+  ht.textContent = el.dimH+' mm';
+  g.appendChild(ht);
   return g;
 }
 
 function buildTextNode(el){
   const g = svgEl('g',{'data-role':'element','data-id':el.id});
-  const t = svgEl('text',{x:el.x,y:el.y,fill:'#20242b','font-family':"'JetBrains Mono',monospace",'font-size':el.size,'font-weight':600});
+  const t = svgEl('text',{x:el.x,y:el.y,fill:'#20242b','font-family':"'JetBrains Mono',monospace",'font-size':el.size,'font-weight':700});
   t.textContent = el.text;
   g.appendChild(t);
   return g;
@@ -1026,6 +1106,10 @@ function onPointerMove(e){
         const dx = pt.x-drag.startPt.x, dy = pt.y-drag.startPt.y;
         const r = computeResize(drag.orig, drag.handle, dx, dy);
         el.x=r.x; el.y=r.y; el.w=r.w; el.h=r.h;
+        if(el.type==='pcb' || el.type==='box'){
+          el.dimW = Math.round(r.w/PX_PER_MM);
+          el.dimH = Math.round(r.h/PX_PER_MM);
+        }
         render();
       }
       return;
@@ -1618,15 +1702,19 @@ function updatePropertyPanel(){
     html += '<h3>PCB</h3><p class="sub">초록 기판 · 자유 크기 조절</p>';
     html += field('이름', 'text', 'labelInput', el.label);
     html += '<div class="field"><label>글자 크기</label><div class="rangewrap"><input type="range" id="labelSizeRange" min="9" max="28" value="'+(el.labelSize||13)+'"><span>'+(el.labelSize||13)+'</span></div></div>';
-    html += '<div class="field"><label>크기 / 위치</label><div class="grid2">'+
-      num('numX', 'X', el.x) + num('numY', 'Y', el.y) + num('numW','너비', el.w) + num('numH','높이', el.h) + '</div></div>';
+    html += '<div class="field"><label>치수 (mm)</label><div class="grid2">'+
+      num('numDimW','가로', el.dimW||Math.round(el.w/PX_PER_MM)) + num('numDimH','세로', el.dimH||Math.round(el.h/PX_PER_MM)) + '</div></div>';
+    html += '<div class="field"><label>위치 (px)</label><div class="grid2">'+
+      num('numX', 'X', el.x) + num('numY', 'Y', el.y) + '</div></div>';
   } else if(el.type==='box'){
     html += '<h3>부품 박스</h3><p class="sub">버튼 · 릴레이 · SMPS 등 범용 박스</p>';
     html += field('이름', 'text', 'labelInput', el.label);
     html += '<div class="field"><label>글자 크기</label><div class="rangewrap"><input type="range" id="labelSizeRange" min="9" max="28" value="'+(el.labelSize||12.5)+'"><span>'+(el.labelSize||12.5)+'</span></div></div>';
     html += '<div class="field"><label>색상</label><div class="swrow" id="themeRow"></div></div>';
-    html += '<div class="field"><label>크기 / 위치</label><div class="grid2">'+
-      num('numX','X', el.x) + num('numY','Y', el.y) + num('numW','너비', el.w) + num('numH','높이', el.h) + '</div></div>';
+    html += '<div class="field"><label>치수 (mm)</label><div class="grid2">'+
+      num('numDimW','가로', el.dimW||Math.round(el.w/PX_PER_MM)) + num('numDimH','세로', el.dimH||Math.round(el.h/PX_PER_MM)) + '</div></div>';
+    html += '<div class="field"><label>위치 (px)</label><div class="grid2">'+
+      num('numX','X', el.x) + num('numY','Y', el.y) + '</div></div>';
   } else if(el.type==='text'){
     html += '<h3>텍스트 라벨</h3><p class="sub">더블클릭으로도 편집할 수 있어요</p>';
     html += field('내용', 'text', 'labelInput', el.text);
@@ -1671,8 +1759,16 @@ function updatePropertyPanel(){
   }
   bindNum('numX', v=>{ el.x=v; });
   bindNum('numY', v=>{ el.y=v; });
-  bindNum('numW', v=>{ el.w=Math.max(20,v); });
-  bindNum('numH', v=>{ el.h=Math.max(20,v); });
+  bindNum('numDimW', v=>{
+    const mm = Math.max(1, v);
+    el.dimW = mm;
+    el.w = Math.max(20, mm*PX_PER_MM);
+  });
+  bindNum('numDimH', v=>{
+    const mm = Math.max(1, v);
+    el.dimH = mm;
+    el.h = Math.max(20, mm*PX_PER_MM);
+  });
 
   const lsr = document.getElementById('labelSizeRange');
   if(lsr){
@@ -1811,6 +1907,16 @@ document.getElementById('btnZoomOut').addEventListener('click', ()=>zoomBy(1/1.2
 document.getElementById('btnFit').addEventListener('click', fitToContent);
 zoomLabel.addEventListener('click', fitToContent);
 document.getElementById('btnGrid').addEventListener('click', toggleSnap);
+document.getElementById('gridSizeSelect').addEventListener('change', e=>{
+  state.grid = Number(e.target.value);
+  document.getElementById('dotgrid').setAttribute('width', state.grid);
+  document.getElementById('dotgrid').setAttribute('height', state.grid);
+  render();
+});
+document.getElementById('btnDim').addEventListener('click', ()=>{
+  state.showDimensions = !state.showDimensions;
+  render();
+});
 document.getElementById('btnHelp').addEventListener('click', toggleShortcuts);
 document.getElementById('closeShortcuts').addEventListener('click', toggleShortcuts);
 document.getElementById('shortcutsOverlay').addEventListener('click', e=>{ if(e.target.id==='shortcutsOverlay') toggleShortcuts(); });
@@ -1880,8 +1986,18 @@ async function downloadFile(filename, data, mime){
 }
 function buildExportSvgString(bbox){
   const svg = svgEl('svg',{xmlns:SVGNS, viewBox:bbox.x+' '+bbox.y+' '+bbox.w+' '+bbox.h, width:bbox.w, height:bbox.h});
+  const defs = svgEl('defs',{});
+  const marker = svgEl('marker',{id:'dimArrow', markerWidth:8, markerHeight:6, refX:4, refY:3, orient:'auto-start-reverse', markerUnits:'userSpaceOnUse'});
+  marker.appendChild(svgEl('path',{d:'M0,0 L8,3 L0,6 Z', fill:'#374151'}));
+  defs.appendChild(marker);
+  svg.appendChild(defs);
   svg.appendChild(svgEl('rect',{x:bbox.x,y:bbox.y,width:bbox.w,height:bbox.h,fill:'#ffffff'}));
   state.elements.forEach(el=>svg.appendChild(buildElementNode(el)));
+  if(state.showDimensions){
+    state.elements.forEach(el=>{
+      if((el.type==='pcb' || el.type==='box') && el.dimW && el.dimH) svg.appendChild(buildDimensionOverlay(el));
+    });
+  }
   return new XMLSerializer().serializeToString(svg);
 }
 document.getElementById('btnExportSvg').addEventListener('click', async ()=>{
@@ -1947,6 +2063,7 @@ document.getElementById('importInput').addEventListener('change', e=>{
 /* ---------------- init ---------------- */
 loadInitial();
 loadLibrary();
+document.getElementById('gridSizeSelect').value = String(state.grid);
 setTool('select');
 render();
 renderLibraryPanel();
