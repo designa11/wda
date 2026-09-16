@@ -531,14 +531,20 @@ function elementBBox(el){
   }
   if(el.type==='port'){
     const s = el.size||8;
-    const labelW = el.label.length*7+18;
-    return {x:el.x-s, y:el.y-s, w:s*2+labelW, h:s*2};
+    const fs = Math.max(10, Math.round(s*1.5));
+    const gap = Math.max(7, s*0.25);
+    const labelW = el.label.length*fs*0.6 + gap + 10;
+    return {x:el.x-s, y:el.y-s, w:s*2+labelW, h:Math.max(s*2, fs)};
   }
   if(el.type==='legend'){
     const m = legendMetrics(el);
     return {x:el.x, y:el.y, w:m.width, h:m.height};
   }
   if((el.type==='pcb' || el.type==='box') && state.showDimensions && el.dimW && el.dimH){
+    const pad = DIM_OFFSET + 14;
+    return {x:el.x-pad, y:el.y-pad, w:el.w+pad, h:el.h+pad};
+  }
+  if(el.type==='group' && state.showDimensions && groupHasDimensionedChild(el)){
     const pad = DIM_OFFSET + 14;
     return {x:el.x-pad, y:el.y-pad, w:el.w+pad, h:el.h+pad};
   }
@@ -670,10 +676,8 @@ function render(){
   });
 
   if(state.showDimensions){
-    state.elements.forEach(el=>{
-      if((el.type==='pcb' || el.type==='box') && el.dimW && el.dimH){
-        dimensionsLayer.appendChild(buildDimensionOverlay(el));
-      }
+    collectDimensionTargets(state.elements, 0, 0, []).forEach(t=>{
+      dimensionsLayer.appendChild(buildDimensionOverlay(t));
     });
   }
 
@@ -735,8 +739,10 @@ function buildPortNode(el){
   } else {
     g.appendChild(svgEl('circle',{cx:el.x,cy:el.y,r:s,fill:el.color,stroke:'#20242b','stroke-width':1.6}));
   }
-  const t = svgEl('text',{x:el.x+s+7,y:el.y,'dominant-baseline':'middle',
-    fill:'#20242b','font-family':"'JetBrains Mono',monospace",'font-size':12,'font-weight':700});
+  const fs = Math.max(10, Math.round(s*1.5));
+  const gap = Math.max(7, s*0.25);
+  const t = svgEl('text',{x:el.x+s+gap,y:el.y,'dominant-baseline':'middle',
+    fill:'#20242b','font-family':"'JetBrains Mono',monospace",'font-size':fs,'font-weight':700});
   t.textContent = el.label;
   g.appendChild(t);
   return g;
@@ -832,6 +838,23 @@ function buildDimensionOverlay(el){
   ht.textContent = el.dimH+' mm';
   g.appendChild(ht);
   return g;
+}
+function collectDimensionTargets(elements, offsetX, offsetY, out){
+  offsetX = offsetX||0; offsetY = offsetY||0;
+  elements.forEach(el=>{
+    if(el.type==='group'){
+      collectDimensionTargets(el.children, offsetX+el.x, offsetY+el.y, out);
+    } else if((el.type==='pcb' || el.type==='box') && el.dimW && el.dimH){
+      out.push({x:el.x+offsetX, y:el.y+offsetY, w:el.w, h:el.h, dimW:el.dimW, dimH:el.dimH});
+    }
+  });
+  return out;
+}
+function groupHasDimensionedChild(el){
+  return (el.children||[]).some(child=>{
+    if(child.type==='group') return groupHasDimensionedChild(child);
+    return (child.type==='pcb'||child.type==='box') && child.dimW && child.dimH;
+  });
 }
 
 function buildTextNode(el){
@@ -1290,7 +1313,8 @@ function openLabelEditor(id, selectAll){
   const rect = canvasEl.getBoundingClientRect();
   let wx, wy, ww;
   if(el.type==='text'){ wx = el.x; wy = el.y-el.size; ww = Math.max(80, el.text.length*el.size*0.6+20); }
-  else if(el.type==='port'){ const s = el.size||8; wx = el.x+s+6; wy = el.y-11; ww = Math.max(70, el.label.length*8+24); }
+  else if(el.type==='port'){ const s = el.size||8; const fs = Math.max(10, Math.round(s*1.5)); const gap = Math.max(7, s*0.25);
+    wx = el.x+s+gap; wy = el.y-fs*0.6; ww = Math.max(70, el.label.length*fs*0.6+24); }
   else { wx = el.x; wy = el.y+el.h/2-11; ww = el.w; }
   const screenX = wx*state.zoom + state.pan.x;
   const screenY = wy*state.zoom + state.pan.y;
@@ -1701,7 +1725,7 @@ function updatePropertyPanel(){
   if(el.type==='pcb'){
     html += '<h3>PCB</h3><p class="sub">초록 기판 · 자유 크기 조절</p>';
     html += field('이름', 'text', 'labelInput', el.label);
-    html += '<div class="field"><label>글자 크기</label><div class="rangewrap"><input type="range" id="labelSizeRange" min="9" max="28" value="'+(el.labelSize||13)+'"><span>'+(el.labelSize||13)+'</span></div></div>';
+    html += '<div class="field"><label>글자 크기</label><div class="rangewrap"><input type="range" id="labelSizeRange" min="9" max="60" value="'+(el.labelSize||13)+'"><span>'+(el.labelSize||13)+'</span></div></div>';
     html += '<div class="field"><label>치수 (mm)</label><div class="grid2">'+
       num('numDimW','가로', el.dimW||Math.round(el.w/PX_PER_MM)) + num('numDimH','세로', el.dimH||Math.round(el.h/PX_PER_MM)) + '</div></div>';
     html += '<div class="field"><label>위치 (px)</label><div class="grid2">'+
@@ -1709,7 +1733,7 @@ function updatePropertyPanel(){
   } else if(el.type==='box'){
     html += '<h3>부품 박스</h3><p class="sub">버튼 · 릴레이 · SMPS 등 범용 박스</p>';
     html += field('이름', 'text', 'labelInput', el.label);
-    html += '<div class="field"><label>글자 크기</label><div class="rangewrap"><input type="range" id="labelSizeRange" min="9" max="28" value="'+(el.labelSize||12.5)+'"><span>'+(el.labelSize||12.5)+'</span></div></div>';
+    html += '<div class="field"><label>글자 크기</label><div class="rangewrap"><input type="range" id="labelSizeRange" min="9" max="60" value="'+(el.labelSize||12.5)+'"><span>'+(el.labelSize||12.5)+'</span></div></div>';
     html += '<div class="field"><label>색상</label><div class="swrow" id="themeRow"></div></div>';
     html += '<div class="field"><label>치수 (mm)</label><div class="grid2">'+
       num('numDimW','가로', el.dimW||Math.round(el.w/PX_PER_MM)) + num('numDimH','세로', el.dimH||Math.round(el.h/PX_PER_MM)) + '</div></div>';
@@ -1718,7 +1742,7 @@ function updatePropertyPanel(){
   } else if(el.type==='text'){
     html += '<h3>텍스트 라벨</h3><p class="sub">더블클릭으로도 편집할 수 있어요</p>';
     html += field('내용', 'text', 'labelInput', el.text);
-    html += '<div class="field"><label>글자 크기</label><div class="rangewrap"><input type="range" id="sizeRange" min="10" max="32" value="'+el.size+'"><span>'+el.size+'</span></div></div>';
+    html += '<div class="field"><label>글자 크기</label><div class="rangewrap"><input type="range" id="sizeRange" min="10" max="72" value="'+el.size+'"><span>'+el.size+'</span></div></div>';
   } else if(el.type==='wire'){
     html += '<h3>배선</h3><p class="sub">꺾인점 '+el.points.length+'개 · 드래그로 이동, 더블클릭으로 점 추가/삭제</p>';
     html += '<div class="field"><label>색상</label><div class="swrow" id="wireColorRow"></div></div>';
@@ -1730,7 +1754,7 @@ function updatePropertyPanel(){
       '<button class="btn" id="shapeCircleBtn" style="text-align:center;'+(el.shape==='circle'?'border-color:var(--accent);color:var(--accent);':'')+'">● 원</button>'+
       '<button class="btn" id="shapeSquareBtn" style="text-align:center;'+(el.shape==='square'?'border-color:var(--accent);color:var(--accent);':'')+'">■ 사각</button></div></div>';
     html += '<div class="field"><label>색상</label><div class="swrow" id="portColorRow"></div></div>';
-    html += '<div class="field"><label>크기</label><div class="rangewrap"><input type="range" id="portSizeRange" min="4" max="16" value="'+(el.size||8)+'"><span>'+(el.size||8)+'</span></div></div>';
+    html += '<div class="field"><label>크기 (텍스트도 함께 커집니다)</label><div class="rangewrap"><input type="range" id="portSizeRange" min="4" max="40" value="'+(el.size||8)+'"><span>'+(el.size||8)+'</span></div></div>';
   } else if(el.type==='legend'){
     html += '<h3>배선 범례</h3><p class="sub">색상별 배선의 의미를 적어두세요 (예: 빨강 = LAN선)</p>';
     html += field('제목', 'text', 'legendTitleInput', el.title||'배선 범례');
@@ -1994,9 +2018,7 @@ function buildExportSvgString(bbox){
   svg.appendChild(svgEl('rect',{x:bbox.x,y:bbox.y,width:bbox.w,height:bbox.h,fill:'#ffffff'}));
   state.elements.forEach(el=>svg.appendChild(buildElementNode(el)));
   if(state.showDimensions){
-    state.elements.forEach(el=>{
-      if((el.type==='pcb' || el.type==='box') && el.dimW && el.dimH) svg.appendChild(buildDimensionOverlay(el));
-    });
+    collectDimensionTargets(state.elements, 0, 0, []).forEach(t=>svg.appendChild(buildDimensionOverlay(t)));
   }
   return new XMLSerializer().serializeToString(svg);
 }
